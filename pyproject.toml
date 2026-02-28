@@ -28,7 +28,7 @@ dev = [
 ]
 
 [tool.setuptools]
-py-modules = ["app", "save_reader", "scraper"]
+py-modules = ["app", "save_reader", "scraper", "paths_config"]
 
 [tool.ruff]
 line-length = 100

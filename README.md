@@ -22,6 +22,8 @@ This project is distributed as **code only**.
 - `save_reader.py` – Savegame parser (`.scop` / `.scoc`)
 - `scraper.py` – local data/icon extractor from game/mod files
 - `pyproject.toml` – dependencies and project metadata
+- `paths_config.json` – central path configuration for app + scraper
+- `paths_config.py` – config loader used by app and scraper
 - `start_gamma_locker.sh` / `.ps1` / `.bat` – bootstrap launchers (auto-setup + start)
 - `docs/branding/*` – logo assets for README/release branding
 - `loadout_lab_data/.gitkeep` – placeholder for local runtime data
@@ -119,6 +121,16 @@ Dependencies are installed automatically by the bootstrap launchers.
 
 ## First-Time Setup (Required)
 
+### 0) Configure your local paths once
+
+Edit `paths_config.json` and set the paths for your installation:
+- `save_dir` → your Anomaly/GAMMA savegames folder
+- `scan_paths` → roots to scan for weapon `.ltx` data
+- `text_paths` → roots/folders for localization XML files
+- `texture_paths` → roots/folders that contain weapon icon `.dds` textures
+
+Both `app.py` and `scraper.py` read this file, so the community only needs to change paths in one place.
+
 Before running the app for real usage, generate local data from your own installation:
 
 ```bash
@@ -162,18 +174,13 @@ Then open `http://localhost:8501`.
 
 ## Important Paths to Configure
 
-In `app.py`:
+All user-specific paths are configured in one file:
 
-```python
-SAVE_DIR = "/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/appdata/savedgames/"
+```json
+paths_config.json
 ```
 
-Update this path for your local installation.
-
-In `scraper.py`, adjust if needed:
-- `SCAN_PATHS`
-- `TEXT_PATHS`
-- `TEXTURE_PATHS`
+No code edits are required for normal path setup.
 
 ---
 

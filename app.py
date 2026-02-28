@@ -6,12 +6,14 @@ from itertools import product
 from PIL import Image
 import altair as alt
 from save_reader import get_savegames, extract_weapons_from_scop
+from paths_config import get_path
 
 # --- CONFIG & PATHS ---
 DATA_DIR = "loadout_lab_data"
 LOCKER_FILE = os.path.join(DATA_DIR, "my_locker.json")
 BACKUP_FILE = os.path.join(DATA_DIR, "my_locker_backup.json")
 SAVE_DIR = "/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/appdata/savedgames/"
+SAVE_DIR = str(get_path("save_dir", SAVE_DIR))
 
 # --- CONFIG & REGELN ---
 GROUP_LIGHT = ['5.45x39', '5.56x45', '7.62x39', '9x39']

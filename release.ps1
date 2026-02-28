@@ -24,6 +24,8 @@ $files = @(
   ".gitignore",
   "README.md",
   "pyproject.toml",
+  "paths_config.py",
+  "paths_config.json",
   "app.py",
   "save_reader.py",
   "scraper.py",

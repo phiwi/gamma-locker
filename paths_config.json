@@ -1,0 +1,15 @@
+{
+  "save_dir": "/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/appdata/savedgames/",
+  "scan_paths": [
+    "/mnt/c/G.A.M.M.A/MO2/mods",
+    "/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/gamedata/configs/items/weapons"
+  ],
+  "text_paths": [
+    "/mnt/c/G.A.M.M.A/MO2/mods",
+    "/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/gamedata/configs/text/eng"
+  ],
+  "texture_paths": [
+    "/mnt/c/G.A.M.M.A/MO2/mods",
+    "/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/gamedata/textures"
+  ]
+}

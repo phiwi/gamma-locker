@@ -1,19 +1,11 @@
 import os, re, pandas as pd, tqdm
 from pathlib import Path
+from paths_config import get_path_list
 
 # --- CONFIGURATION ---
-SCAN_PATHS = [
-    Path("/mnt/c/G.A.M.M.A/MO2/mods"),
-    Path("/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/gamedata/configs/items/weapons")
-]
-TEXT_PATHS = [
-    Path("/mnt/c/G.A.M.M.A/MO2/mods"),
-    Path("/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/gamedata/configs/text/eng")
-]
-TEXTURE_PATHS = [
-    Path("/mnt/c/G.A.M.M.A/MO2/mods"),
-    Path("/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/gamedata/textures")
-]
+SCAN_PATHS = get_path_list("scan_paths")
+TEXT_PATHS = get_path_list("text_paths")
+TEXTURE_PATHS = get_path_list("texture_paths")
 OUT_DIR = Path("./loadout_lab_data")
 os.makedirs(OUT_DIR, exist_ok=True)
 
