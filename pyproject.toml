@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gamma-loadout-app"
+version = "0.1.0"
+description = "Standalone Streamlit loadout planner for STALKER GAMMA with savegame import and icon scraping tools."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [
+  { name = "Local User" }
+]
+dependencies = [
+  "streamlit>=1.32",
+  "pandas>=2.0",
+  "numpy>=1.24",
+  "pillow>=10.0",
+  "altair>=5.0",
+  "tqdm>=4.66"
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.3",
+  "pytest>=8.0"
+]
+
+[tool.setuptools]
+py-modules = ["app", "save_reader", "scraper"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
