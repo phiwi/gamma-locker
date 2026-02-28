@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Local runtime state (can be regenerated)
+loadout_lab_data/my_locker.json
+loadout_lab_data/my_locker_backup.json
+loadout_lab_data/__debug_*.png
+loadout_lab_data/tmp_*.png
+
+# Logs
+*.log
