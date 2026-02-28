@@ -19,3 +19,6 @@ loadout_lab_data/**
 
 # Logs
 *.log
+
+# Release artifacts
+dist/

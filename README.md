@@ -1,77 +1,76 @@
 # GAMMA Loadout App (Standalone)
 
-## Code-only Distribution (wichtig)
+## Code-Only Distribution (Community Model)
 
-Dieses Projekt wird für die Community als **Code-only** veröffentlicht.
+This project is distributed as **code only**.
 
-- Wir veröffentlichen **nur den Python-Code** und die Projektkonfiguration.
-- Jede Person erzeugt ihre eigenen Daten/Icons lokal aus der eigenen GAMMA/MO2-Installation.
-- Mod-Assets (Textures, DDS, extrahierte Icons) werden **nicht** als Release-Content verteilt.
-
-Diese Version ist als **eigene, saubere App-Mappe** gedacht und enthält die App-Komponenten:
-
-- `app.py` – Streamlit UI (Lager, Suche, Set-Planer)
-- `save_reader.py` – Savegame-Reader (`.scop/.scoc`)
-- `scraper.py` – Daten-/Icon-Generator aus GAMMA-Dateien
-- `loadout_lab_data/` – lokaler Laufzeitordner (wird pro Nutzer:in lokal erzeugt/gefüllt)
+- We publish Python source code and project configuration.
+- Each user generates their own local data/icons by scraping their own GAMMA/MO2 installation.
+- Mod assets (DDS textures, extracted icons, etc.) are **not** shipped in releases.
 
 ---
 
-## 1) Was die App kann
+## Included Files
 
-## Lagerverwaltung
-- Waffen im Locker anzeigen, hinzufügen, entfernen
-- Bulk-Entfernung über Checkboxen
-- Locker speichern/laden
-- Backup-Restore
+- `app.py` – Streamlit web UI (locker, search, strategy planner)
+- `save_reader.py` – Savegame parser (`.scop` / `.scoc`)
+- `scraper.py` – local data/icon extractor from game/mod files
+- `pyproject.toml` – dependencies and project metadata
+- `loadout_lab_data/.gitkeep` – placeholder for local runtime data
 
-## Savegame-Import
-- Savegames aus `SAVE_DIR` lesen
-- Alle gefundenen Waffen hinzufügen oder ersetzen
-- Selektiver Import einzelner Waffen
+---
 
-## Waffen-Suche
-- Suche per Name/ID (mehrere Keywords möglich)
-- Ergebnisliste mit Stats und Icon
-- Direkter Add/Remove aus den Treffern
-- Melee/Knife/Axe/Tomahawk werden herausgefiltert
+## Features
 
-## Set-Planer
-- Erzeugt Triad-Loadouts mit exakt:
+### Locker Management
+- Add/remove weapons
+- Bulk removal via checkboxes
+- Save/load local locker state
+- Backup restore
+
+### Savegame Import
+- Read savegames from `SAVE_DIR`
+- Add-all or replace-all from save
+- Selective import
+
+### Weapon Search
+- Multi-keyword search by ID/name
+- Preview icons and stats
+- Direct add/remove from results
+- Melee/knife/axe entries filtered out
+
+### Strategy Planner
+- Builds strict triad sets:
   - `1 Sidearm`
   - `1 Power`
   - `1 Workhorse`
-- Zwei Modi:
-  - `Balanced` (nahe Ziel-Mittelwert)
-  - `Maxxed` (maximaler Gesamtscore)
-- Phasenmodell (`P1`, `P2H0`, `P1R1`, `P2H1`, `P3`)
-- Badges/Farben für Triad/Hybrid/Redundanz
-- Sortierung nach Score oder Bildungsreihenfolge
-- Suche innerhalb der Sets (z. B. `spas12`)
-- Zufälliges Loadout würfeln
+- Modes: `Balanced` and `Maxxed`
+- Phase pipeline (`P1`, `P2H0`, `P1R1`, `P2H1`, `P3`)
+- Badge-based hybrid/redundancy classification
+- Sorting, set search, random roll
 
-## Icon-Handling
-- RGBA-Komposition auf schwarzem Hintergrund
-- Auto-Erkennung möglicher R/B-Kanalvertauschung
-- Fallback-Logik bei ungültigen/transparenten Icons
+### Icon Handling
+- RGBA compositing on black background
+- Per-icon R/B swap detection for mixed DDS exports
+- Fallback handling for invalid/transparent icons
 
 ---
 
-## 2) Voraussetzungen
+## Requirements
 
-- Linux/WSL empfohlen
 - Python `3.10+`
-- Pakete:
+- Recommended environment: Linux / WSL
+- Python packages:
   - `streamlit`
   - `pandas`
   - `numpy`
   - `pillow`
   - `altair`
-  - `tqdm` (für `scraper.py`)
-- Optional für `scraper.py`:
+  - `tqdm`
+- Optional for `scraper.py`:
   - ImageMagick (`convert`)
 
-Installation der Python-Pakete:
+Install dependencies:
 
 ```bash
 python3 -m pip install streamlit pandas numpy pillow altair tqdm
@@ -79,119 +78,102 @@ python3 -m pip install streamlit pandas numpy pillow altair tqdm
 
 ---
 
-## 3) Start der App
+## First-Time Setup (Required)
 
-Aus diesem Ordner starten:
+Before running the app for real usage, generate local data from your own installation:
 
 ```bash
-cd gamma_loadout_app
-streamlit run app.py
+python3 scraper.py
 ```
 
-Dann Browser öffnen (normalerweise `http://localhost:8501`).
+This creates local runtime artifacts such as:
+- `loadout_lab_data/weapons_stats.csv`
+- `loadout_lab_data/icons/*.png`
+
+If these are missing, the app cannot provide meaningful output.
 
 ---
 
-## 4) Wichtige Konfiguration
+## Run the App
 
-In `app.py` ist der Savegame-Pfad fest hinterlegt:
+From this folder:
+
+```bash
+streamlit run app.py
+```
+
+Then open `http://localhost:8501`.
+
+---
+
+## Important Paths to Configure
+
+In `app.py`:
 
 ```python
 SAVE_DIR = "/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/appdata/savedgames/"
 ```
 
-Passe den Pfad an, wenn deine Installation woanders liegt.
+Update this path for your local installation.
 
-In `scraper.py` sind Scan-/Texturpfade ebenfalls fest konfiguriert (`SCAN_PATHS`, `TEXT_PATHS`, `TEXTURE_PATHS`).
+In `scraper.py`, adjust if needed:
+- `SCAN_PATHS`
+- `TEXT_PATHS`
+- `TEXTURE_PATHS`
 
 ---
 
-## 5) Daten neu erzeugen (erster Pflichtschritt)
+## Typical User Flow
 
-Vor der ersten Nutzung (oder nach Mod-Änderungen) musst du lokal scrapen:
+1. Run `python3 scraper.py`
+2. Start app: `streamlit run app.py`
+3. Use **Weapon Search** to build locker
+4. Optionally import from savegame
+5. Open **Strategy Planner**
+6. Choose `Balanced` or `Maxxed`
+7. Sort/filter sets and roll random loadouts
+
+---
+
+## Troubleshooting
+
+### App does not start
+- Check Python version: `python3 --version`
+- Reinstall dependencies
+
+### No savegames detected
+- Verify `SAVE_DIR`
+- Confirm `.scop`/`.scoc` files exist
+
+### Missing or incorrect icons
+- Re-run `python3 scraper.py`
+- Modded texture packs can change icon sources; some edge cases may still require manual tweaks
+
+### Slow first load
+- Normal with large icon/data sets
+
+---
+
+## Community Release Workflow
+
+- Keep repository code-only
+- Do not publish generated `loadout_lab_data` artifacts
+- Tag releases with source + docs only
+
+---
+
+## Useful Commands
 
 ```bash
+# Generate local data
 python3 scraper.py
-```
 
-Das schreibt/aktualisiert u. a.:
-- `loadout_lab_data/weapons_stats.csv`
-- `loadout_lab_data/icons/*.png`
-
-Hinweis: Je nach Mod-Setup kann das einige Zeit dauern.
-
-Wenn `weapons_stats.csv` und Icons fehlen, kann die App nicht sinnvoll arbeiten.
-
----
-
-## 6) Bedienablauf (empfohlen)
-
-1. App starten
-2. Tab **Waffen-Suche** nutzen und Waffen ins Locker legen
-3. Optional **Savegame-Import** in der Sidebar nutzen
-4. Tab **Strategie-Planer** öffnen
-5. Modus (`Balanced`/`Maxxed`) wählen
-6. Sets sortieren/suchen (`spas12`, `sr25`, …)
-7. Optional Zufalls-Set würfeln
-
----
-
-## 7) Rollenlogik (Kurzfassung)
-
-- **Sidearm**:
-  - Pistolen in Slot 1
-  - plus erlaubte kompakte MPs (z. B. P90, Veresk, MP5K-Familie)
-- **Power**:
-  - Sniper/DMR/Battle/LMG bzw. starke Kaliber
-- **Workhorse**:
-  - restliche Primärwaffen inkl. möglicher Close-Hybrid-Kandidaten
-
-Die Set-Erzeugung erzwingt immer eine vollständige Triad-Kombination.
-
----
-
-## 8) Troubleshooting
-
-## App startet nicht
-- Prüfe Python-Version: `python3 --version`
-- Prüfe Paketinstallation (siehe Voraussetzungen)
-
-## Keine Savegames sichtbar
-- `SAVE_DIR` in `app.py` prüfen
-- Existieren `.scop/.scoc` Dateien im Zielordner?
-
-## Falsche/fehlende Icons
-- Bei stark modifizierten Texturpaketen `scraper.py` neu laufen lassen
-- Einzelne kaputte PNGs können transparent sein; die App hat Fallbacks, aber nicht jede Mod-Kombi ist perfekt matchbar
-
-## Sehr langsame erste Anzeige
-- Viele Icons + große CSVs sind normal; nach dem ersten Laden meist schneller
-
----
-
-## 9) Git-Layout in diesem Standalone-Ordner
-
-Dieses Verzeichnis hat ein eigenes Git-Repository (unabhängig vom alten Root-Ordner).
-So bleibt die App sauber getrennt von Savegame-/Test-/Restdateien im Hauptverzeichnis.
-
-Zusätzlich gilt für Releases:
-- `loadout_lab_data/`-Artefakte sind Build-/Runtime-Output und gehören nicht in veröffentlichte Code-Tags.
-- Release-Bundles sollten nur Code + Doku enthalten.
-
----
-
-## 10) Nützliche Kommandos
-
-```bash
-# App starten
+# Run app
 streamlit run app.py
 
-# Scraper laufen lassen
-python3 scraper.py
+# Build release ZIP (Linux/WSL)
+bash release.sh
 
-# Git-Status
-git status
-
-# Letzte Commits
-git log --oneline -n 5
+# Build release ZIP (PowerShell)
+pwsh -File release.ps1
 ```

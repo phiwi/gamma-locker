@@ -142,8 +142,8 @@ def load_icon_image(path):
     orig_rgb = to_rgb_on_black(orig_rgba)
     swap_rgb = to_rgb_on_black(swap_rgba)
 
-    # Manche DDS->PNG Exporte haben vertauschte R/B-Kanäle, andere nicht.
-    # Wir wählen pro Icon die plausiblere Variante über Farbbalance.
+    # Some DDS->PNG exports have swapped R/B channels, others do not.
+    # Choose the more plausible variant per icon via a simple color-balance heuristic.
     o_stat = orig_rgb.convert("RGB").resize((1, 1), Image.BOX).getpixel((0, 0))
     use_swapped = o_stat[2] > (o_stat[0] * 1.02)
 
@@ -384,110 +384,110 @@ def calculate_all_sets(inventory_ids, strategy):
 
 
 # --- UI SIDEBAR ---
-st.sidebar.title("🎒 Lager-Steuerung")
+st.sidebar.title("🎒 Locker Controls")
 col_b1, col_b2 = st.sidebar.columns(2)
-if col_b1.button("💾 Speichern"):
+if col_b1.button("💾 Save"):
     save_l()
-    st.sidebar.success("Gespeichert")
-if col_b2.button("🗑️ Leeren"):
+    st.sidebar.success("Saved")
+if col_b2.button("🗑️ Clear"):
     st.session_state.locker = []
     save_l()
     st.rerun()
 
-# Geheimer Backup-Restore Button (unauffällig platziert)
-with st.sidebar.expander("🛠️ Erweitert"):
-    if st.button("⏪ Letztes Backup laden"):
+# Hidden backup restore controls
+with st.sidebar.expander("🛠️ Advanced"):
+    if st.button("⏪ Restore latest backup"):
         if restore_backup():
-            st.success("Backup wiederhergestellt!")
+            st.success("Backup restored!")
             st.rerun()
         else:
-            st.error("Kein Backup gefunden.")
+            st.error("No backup found.")
 
-if st.sidebar.button("🎲 50 Zufallswaffen laden"):
+if st.sidebar.button("🎲 Load 50 random weapons"):
     st.session_state.locker = df['id'].sample(50).tolist()
     save_l()
     st.rerun()
 
 st.sidebar.divider()
-st.sidebar.subheader("🔌 Savegame-Import")
+st.sidebar.subheader("🔌 Savegame import")
 saves = get_savegames(SAVE_DIR)
 if saves:
-    selected_save = st.sidebar.selectbox("Speicherstand wählen", saves)
+    selected_save = st.sidebar.selectbox("Select savegame", saves)
     col_sync1, col_sync2 = st.sidebar.columns(2)
     
-    if col_sync1.button("📥 Alles hinzufügen"):
-        with st.spinner("Scanne Savegame..."):
+    if col_sync1.button("📥 Add all"):
+        with st.spinner("Scanning savegame..."):
             all_ids = df['id'].unique().tolist()
             found = extract_weapons_from_scop(os.path.join(SAVE_DIR, selected_save), all_ids)
             if found:
                 st.session_state.locker = list(set(st.session_state.locker + found))
                 save_l()
-                st.sidebar.success(f"{len(found)} Waffen hinzugefügt!")
+                st.sidebar.success(f"Added {len(found)} weapons!")
                 st.rerun()
     
-    if col_sync2.button("🔄 Alles Ersetzen"):
-        with st.spinner("Scanne Savegame..."):
+    if col_sync2.button("🔄 Replace all"):
+        with st.spinner("Scanning savegame..."):
             all_ids = df['id'].unique().tolist()
             found = extract_weapons_from_scop(os.path.join(SAVE_DIR, selected_save), all_ids)
             if found:
                 st.session_state.locker = found
                 save_l()
-                st.sidebar.success(f"{len(found)} Waffen synchronisiert!")
+                st.sidebar.success(f"Synced {len(found)} weapons!")
                 st.rerun()
 
-    # NEU: Selektiver Import
-    with st.sidebar.expander("🔍 Einzellne Waffen importieren"):
+    # Selective import
+    with st.sidebar.expander("🔍 Import selected weapons"):
         all_ids = df['id'].unique().tolist()
         found_in_save = extract_weapons_from_scop(os.path.join(SAVE_DIR, selected_save), all_ids)
         if found_in_save:
-            # Filtere Waffen, die NICHT bereits im Lager sind
+            # Only show weapons not already present in locker
             new_options = [w_id for w_id in found_in_save if w_id not in st.session_state.locker]
             
             if new_options:
-                # Schöne Namen für die Auswahl generieren
+                # Build human-readable option labels
                 options_map = {}
                 for w_id in new_options:
                     row = df[df['id'] == w_id]
                     name = row['pretty_name'].values[0] if not row.empty else w_id
                     options_map[f"{name} ({w_id})"] = w_id
                 
-                selected_to_add = st.multiselect("Wähle Fundstücke:", list(options_map.keys()))
-                if st.button("➕ Auswahlt hinzufügen"):
+                selected_to_add = st.multiselect("Select found weapons:", list(options_map.keys()))
+                if st.button("➕ Add selection"):
                     ids_to_add = [options_map[sel] for sel in selected_to_add]
                     st.session_state.locker = list(set(st.session_state.locker + ids_to_add))
                     save_l()
-                    st.success(f"{len(ids_to_add)} Waffen importiert!")
+                    st.success(f"Imported {len(ids_to_add)} weapons!")
                     st.rerun()
             else:
-                st.write("Alle Waffen dieses Saves sind bereits im Lager.")
+                st.write("All weapons from this save are already in your locker.")
 else:
-    st.sidebar.error("Keine Savegames gefunden.")
+    st.sidebar.error("No savegames found.")
 
-# --- HAUPTBEREICH ---
+# --- MAIN AREA ---
 st.title("☢️ GAMMA Balanced Locker Master")
-t0, t1, t2 = st.tabs(["🎒 Mein Lager", "🔍 Waffen-Suche", "⚖️ Strategie-Planer"])
+t0, t1, t2 = st.tabs(["🎒 My Locker", "🔍 Weapon Search", "⚖️ Strategy Planner"])
 
 with t0:
-    st.header(f"Inhalt ({len(st.session_state.locker)} Waffen)")
+    st.header(f"Contents ({len(st.session_state.locker)} weapons)")
     if not st.session_state.locker:
-        st.info("Dein Lager ist leer. Nutze die Suche oder den Savegame-Import, um Waffen hinzuzufügen.")
+        st.info("Your locker is empty. Use search or savegame import to add weapons.")
     else:
-        # Kompakte Tabellen-Ansicht für das Lager
+        # Compact table view for locker
         locker_df = df[df['id'].isin(st.session_state.locker)].copy()
         
         if not locker_df.empty:
-            locker_df.insert(0, 'Entfernen', False)
+            locker_df.insert(0, 'Remove', False)
             
-            # Icons für ImageColumn
+            # Icons for ImageColumn
             def get_icon_path(w_id):
-                # Absoluter Pfad wird oft für ImageColumn benötigt
+                # Absolute path is often needed for ImageColumn
                 p = os.path.abspath(f"loadout_lab_data/icons/{w_id}.png")
                 return p if os.path.exists(p) else None
 
             locker_df['Icon'] = locker_df['id'].apply(get_icon_path)
             
-            display_df = locker_df[['Entfernen', 'Icon', 'id', 'pretty_name', 'class', 'hit', 'rpm', 'rec', 'mag', 'score']].copy()
-            display_df.columns = ['Entfernen', 'Icon', 'ID', 'Name', 'Klasse', 'Damage', 'RPM', 'Recoil', 'Mag Size', 'Score']
+            display_df = locker_df[['Remove', 'Icon', 'id', 'pretty_name', 'class', 'hit', 'rpm', 'rec', 'mag', 'score']].copy()
+            display_df.columns = ['Remove', 'Icon', 'ID', 'Name', 'Class', 'Damage', 'RPM', 'Recoil', 'Mag Size', 'Score']
             
             display_df['Score'] = display_df['Score'].round(3)
             display_df['Damage'] = (display_df['Damage'] * 100).astype(int)
@@ -499,40 +499,40 @@ with t0:
                 display_df,
                 hide_index=True,
                 width='stretch',
-                disabled=['Icon', 'Name', 'Klasse', 'Damage', 'RPM', 'Recoil', 'Mag Size', 'Score'],
+                disabled=['Icon', 'Name', 'Class', 'Damage', 'RPM', 'Recoil', 'Mag Size', 'Score'],
                 column_config={
-                    "ID": None, # Verstecke die ID-Spalte
-                    "Icon": st.column_config.ImageColumn("Icon", help="Waffenvorschau", width="small"),
-                    "Entfernen": st.column_config.CheckboxColumn("❌", help="Markiere zum Entfernen", default=False),
+                    "ID": None,
+                    "Icon": st.column_config.ImageColumn("Icon", help="Weapon preview", width="small"),
+                    "Remove": st.column_config.CheckboxColumn("❌", help="Mark to remove", default=False),
                 },
                 key="locker_bulk_editor"
             )
             
-            # Button zum Bestätigen des Löschvorgangs (verhindert Rerun beim Anklicken einzelner Checkboxen)
-            if st.button("🗑️ Markierte Waffen jetzt entfernen"):
-                to_remove = edited_df[edited_df['Entfernen'] == True]['ID'].tolist()
+            # Confirm removal in one action (avoids rerun on each checkbox click)
+            if st.button("🗑️ Remove selected weapons"):
+                to_remove = edited_df[edited_df['Remove'] == True]['ID'].tolist()
                 if to_remove:
                     for w_id in to_remove:
                         if w_id in st.session_state.locker:
                             st.session_state.locker.remove(w_id)
                     save_l()
-                    st.success(f"{len(to_remove)} Waffen entfernt!")
+                    st.success(f"Removed {len(to_remove)} weapons!")
                     st.rerun()
                 else:
-                    st.info("Markiere zuerst Waffen in der Liste (Checkbox ❌), um sie zu löschen.")
+                    st.info("Mark weapons in the list first (❌ checkbox), then remove them.")
         else:
-            # Fallback, falls IDs im Locker sind, die nicht im df existieren
+            # Fallback for unknown IDs in locker
             for w_id in list(st.session_state.locker):
-                st.write(f"Unbekannte Waffe: {w_id}")
-                if st.button("Entfernen", key=f"rm_unk_{w_id}"):
+                st.write(f"Unknown weapon: {w_id}")
+                if st.button("Remove", key=f"rm_unk_{w_id}"):
                     st.session_state.locker.remove(w_id)
                     save_l()
                     st.rerun()
 
 with t1:
-    sq = st.text_input("Waffe suchen (z.B. osw, fn2000, honey)...").lower().strip()
+    sq = st.text_input("Search weapon (e.g. osw, fn2000, honey)...").lower().strip()
     
-    # Filtere Hits basierend auf Suchanfrage oder zeige alles wenn leer
+    # Filter hits by query, or show all when empty
     if sq == "":
         hits = df.sort_values('score', ascending=False)
     else:
@@ -544,28 +544,28 @@ with t1:
                      df['pretty_name'].str.lower().str.contains(kw, na=False))
         hits = df[mask]
     
-    if True: # Block immer ausführen
-        # Melee / Knife / Axe / Tomahawk rausfiltern (klassenseitig und Namens-seitig)
+    if True:
+        # Filter out melee / knife / axe / tomahawk by class, name and id
         melee_pat = 'knife|melee|axe|tomahawk'
         hits = hits[~hits['class'].str.lower().str.contains(melee_pat, na=False)]
         hits = hits[~hits['pretty_name'].str.lower().str.contains(melee_pat, na=False)]
         hits = hits[~hits['id'].str.lower().str.contains(melee_pat, na=False)]
-        # Duplikate nach pretty_name entfernen (erste behalten)
+        # Drop duplicate display names
         hits = hits.drop_duplicates(subset=['pretty_name'])
-        st.write(f"{len(hits)} Treffer")
+        st.write(f"{len(hits)} matches")
         
-        # Tabelle für Suchergebnisse vorbereiten
+        # Prepare table for search results
         if not hits.empty:
-            # Berechne globales Ranking
+            # Compute global rank
             df['global_rank'] = df['score'].rank(ascending=False, method='min')
             
-            # Berechne klassen-internes Ranking
+            # Compute class rank
             df['class_rank'] = df.groupby('class')['score'].rank(ascending=False, method='min')
             
-            # Aktualisiere hits mit den neuen Rankings
+            # Update hits with rank columns
             hits = df.loc[hits.index]
             
-            # Zeige die Top 15 als detaillierte Liste mit Buttons
+            # Show top 15 detailed rows with add/remove buttons
             for _, r in hits.head(15).iterrows():
                 c_img, c_txt, c_btn = st.columns([1, 4, 1])
                 img_path = f"loadout_lab_data/icons/{r['id']}.png"
@@ -575,7 +575,7 @@ with t1:
                 m = "🐗 " if r['mutant_killer'] else ""
                 c_txt.write(f"{m}**{r['pretty_name']}** ({r['ammo_display']}) - *{r['class']}*")
                 if r['id'] in st.session_state.locker:
-                    if c_btn.button("Raus", key=f"main_rm_{r['id']}"):
+                    if c_btn.button("Remove", key=f"main_rm_{r['id']}"):
                         st.session_state.locker.remove(r['id'])
                         save_l()
                         st.rerun()
@@ -586,17 +586,17 @@ with t1:
                         st.rerun()
             
             st.divider()
-            st.subheader("📊 Detaillierte Stats der Suchergebnisse")
+            st.subheader("📊 Detailed stats for search results")
             
-            # DataFrame für die Anzeige formatieren
+            # Format dataframe for display
             display_df = hits[['pretty_name', 'class', 'global_rank', 'class_rank', 'hit', 'rpm', 'rec', 'mag', 'score']].copy()
-            display_df.columns = ['Name', 'Klasse', 'Global Rank', 'Class Rank', 'Damage', 'RPM', 'Recoil', 'Mag Size', 'Score']
+            display_df.columns = ['Name', 'Class', 'Global Rank', 'Class Rank', 'Damage', 'RPM', 'Recoil', 'Mag Size', 'Score']
             
-            # Formatierung
+            # Formatting
             display_df['Global Rank'] = display_df['Global Rank'].astype(int)
             display_df['Class Rank'] = display_df['Class Rank'].astype(int)
             display_df['Score'] = display_df['Score'].round(3)
-            # Damage als Raw-Wert (z.B. 0.53 -> 53)
+            # Damage as raw-style value (e.g. 0.53 -> 53)
             display_df['Damage'] = (display_df['Damage'] * 100).astype(int)
             display_df['Recoil'] = display_df['Recoil'].round(3)
             display_df['Mag Size'] = display_df['Mag Size'].astype(int)
@@ -606,24 +606,24 @@ with t1:
 
 with t2:
     if len(st.session_state.locker) < 3:
-        st.warning("Füge mindestens 3 Waffen hinzu, um Sets zu planen.")
+        st.warning("Add at least 3 weapons to generate sets.")
     else:
-        # Diagnose: Rollenverteilung im aktuellen Lager
+        # Diagnostics: role distribution in current locker
         locker_role_df = df[df['id'].isin(st.session_state.locker)].copy()
         role_counts_diag = locker_role_df['role_label'].value_counts()
         max_non_redundant_sets = 0
         if {'Sidearm', 'Power', 'Workhorse'}.issubset(role_counts_diag.index):
             max_non_redundant_sets = int(min(role_counts_diag['Sidearm'], role_counts_diag['Power'], role_counts_diag['Workhorse']))
         st.info(
-            f"Rollen im Lager – Sidearm: {role_counts_diag.get('Sidearm',0)}, "
+            f"Roles in locker – Sidearm: {role_counts_diag.get('Sidearm',0)}, "
             f"Power: {role_counts_diag.get('Power',0)}, Workhorse: {role_counts_diag.get('Workhorse',0)} | "
-            f"Theoretisch einzigartige Sets (ohne Wiederholung): {max_non_redundant_sets}"
+            f"Theoretical unique sets (without reuse): {max_non_redundant_sets}"
         )
 
-        strat = st.radio("Zuweisungs-Modus:", ["Balanced", "Maxxed"], horizontal=True)
+        strat = st.radio("Assignment mode:", ["Balanced", "Maxxed"], horizontal=True)
         res_sets = calculate_all_sets(st.session_state.locker, strat)
 
-        # Helper für Set-Klassifizierung (Farben) und Verteilung
+        # Helper for set classification (color badges) and distribution
         def is_close_hybrid_disp(w):
             if get_role(w) == "Sidearm":
                 return False
@@ -644,7 +644,7 @@ with t2:
                 return ("🟧", "Hybrid +1R") if has_hybrid else ("🩵", "Triad +1R")
             return "🟥", "Multi-Redundant"
 
-        # Verteilung über Set-Typen vorab berechnen (abhängig von Anzeige-Reihenfolge)
+        # Precompute set-type distribution (depends on display order)
         type_counts = {"Triad clean": 0, "Hybrid clean": 0, "Triad +1R": 0, "Hybrid +1R": 0, "Multi-Redundant": 0}
         seen_for_dist = set()
         score_rows = []
@@ -661,31 +661,31 @@ with t2:
             for w in active_w:
                 seen_for_dist.add(w['id'])
 
-        st.header(f"⚖️ {len(res_sets)} generierte {strat} Loadouts")
+        st.header(f"⚖️ {len(res_sets)} generated {strat} loadouts")
         
-        # --- STATISTIKEN ---
-        with st.expander("📊 Lager-Statistiken & Verteilung"):
-            st.write("Verteilung der Rollen und Munitionstypen in deinem Lager:")
+        # --- STATS ---
+        with st.expander("📊 Locker statistics & distribution"):
+            st.write("Distribution of roles and ammo types in your locker:")
             
-            # Daten für Plots vorbereiten
+            # Prepare data for plots
             stats_df = df[df['id'].isin(st.session_state.locker)].copy()
             
             stats_df['role_label'] = stats_df.apply(get_role, axis=1)
             
-            # Plot 1: Waffen pro Rolle
+            # Plot 1: weapons per role
             role_counts = stats_df['role_label'].value_counts()
-            # Plot 2: Top 10 Munitionstypen
+            # Plot 2: top 10 ammo types
             ammo_counts = stats_df['ammo_display'].value_counts().head(10)
 
             s_col1, s_col2 = st.columns(2)
             with s_col1:
-                st.subheader("Waffen pro Rolle")
+                st.subheader("Weapons per role")
                 st.bar_chart(role_counts)
             with s_col2:
-                st.subheader("Häufigste Kaliber (Top 10)")
+                st.subheader("Most common calibers (Top 10)")
                 st.bar_chart(ammo_counts)
 
-            st.subheader("Set-Verteilung nach Farbe")
+            st.subheader("Set distribution by color")
             dist_df = pd.DataFrame([
                 {"Kategorie": k, "Anzahl": v} for k, v in type_counts.items()
             ])
@@ -702,41 +702,41 @@ with t2:
                 .properties(width="container")
             )
             st.altair_chart(chart)
-            st.caption("Legende: 🟩 Triad clean | 🟦 Hybrid clean | 🩵 Triad +1R | 🟧 Hybrid +1R | 🟥 Multi-Redundant")
-            with st.expander("Legende im Detail"):
+            st.caption("Legend: 🟩 Triad clean | 🟦 Hybrid clean | 🩵 Triad +1R | 🟧 Hybrid +1R | 🟥 Multi-Redundant")
+            with st.expander("Legend details"):
                 st.markdown(
-                    "- 🟩 Triad clean: 0 Redundanz, klassisches Trio (Sidearm + Power + Workhorse) ohne Shotgun/SMG (Slot!=1)\n"
-                    "- 🟦 Hybrid clean: 0 Redundanz, enthält Shotgun oder SMG (Slot!=1)\n"
-                    "- 🩵 Triad +1R: genau 1 Redundanz, kein Hybrid\n"
-                    "- 🟧 Hybrid +1R: genau 1 Redundanz, mit Shotgun/SMG (Slot!=1)\n"
-                    "- 🟥 Multi-Redundant: zwei oder mehr Redundanzen")
+                    "- 🟩 Triad clean: 0 redundancy, classic trio (Sidearm + Power + Workhorse) without Shotgun/SMG (slot!=1)\n"
+                    "- 🟦 Hybrid clean: 0 redundancy, contains Shotgun or SMG (slot!=1)\n"
+                    "- 🩵 Triad +1R: exactly 1 redundancy, no hybrid\n"
+                    "- 🟧 Hybrid +1R: exactly 1 redundancy, with Shotgun/SMG (slot!=1)\n"
+                    "- 🟥 Multi-Redundant: two or more redundancies")
 
             if score_rows:
-                st.subheader("Score-Verteilung der Sets")
+                st.subheader("Set score distribution")
                 score_df = pd.DataFrame(score_rows)
                 score_chart = (
                     alt.Chart(score_df)
                     .mark_bar(opacity=0.8)
                     .encode(
                         x=alt.X("Score", bin=alt.Bin(maxbins=20)),
-                        y=alt.Y("count()", title="Anzahl"),
+                        y=alt.Y("count()", title="Count"),
                         color=alt.Color("Label", scale=alt.Scale(domain=order, range=colors))
                     )
                     .properties(width="container")
                 )
                 st.altair_chart(score_chart)
         
-        # Würfel-Funktion für ein zufälliges Set
+        # Random set roll
         if res_sets:
-            if st.button("🎲 Zufälliges Loadout würfeln"):
+            if st.button("🎲 Roll random loadout"):
                 import random
-                # Speichere sowohl das Set als auch dessen Index (+1 für Anzeige)
+                # Store set and display index (+1)
                 idx = random.randrange(len(res_sets))
                 st.session_state.random_set = res_sets[idx]
                 st.session_state.random_set_num = idx + 1
             
             if 'random_set' in st.session_state:
-                st.info(f"🎯 Dein gewürfeltes Loadout (Set #{st.session_state.random_set_num}):")
+                st.info(f"🎯 Your rolled loadout (Set #{st.session_state.random_set_num}):")
                 r_cols = st.columns(3)
                 labels = ["Sidearm", "Primary (Power)", "Secondary (Workhorse)"]
                 set_order = [2, 0, 1]
@@ -752,14 +752,14 @@ with t2:
                         st.caption(labels[i])
                 st.divider()
 
-        # Sortierungs-Option nun nach dem Würfeln
-        sort_mode = st.radio("Sortierung der Sets:", ["Nach Score", "Nach Bildungsreihenfolge"], horizontal=True, key="sort_mode_sets")
+        # Set sorting options
+        sort_mode = st.radio("Set sorting:", ["By score", "By build order"], horizontal=True, key="sort_mode_sets")
 
-        # Suchfeld für Set-Filterung
-        set_search = st.text_input("🔎 Sets durchsuchen (z. B. spas12)", value="", key="set_search_query")
+        # Search input for filtering sets
+        set_search = st.text_input("🔎 Search sets (e.g. spas12)", value="", key="set_search_query")
 
-        # Sortierung anwenden
-        if sort_mode == "Nach Score":
+        # Apply sorting
+        if sort_mode == "By score":
             phase_priority = {"P1": 0, "P2H0": 1, "P1R1": 2, "P2H1": 3, "P3": 4}
             def score_sort_key(s):
                 active = [w for w in s['weapons'] if w is not None]
@@ -786,10 +786,10 @@ with t2:
                         return True
                 return False
             res_sets = [s for s in res_sets if matches_set(s)]
-            st.caption(f"Gefilterte Sets: {len(res_sets)}")
+            st.caption(f"Filtered sets: {len(res_sets)}")
 
-        # Anzeige der Sets
-        collapse_all = st.button("Alle einklappen")
+        # Set display
+        collapse_all = st.button("Collapse all")
         seen_ids = set()
         for idx, s_entry in enumerate(res_sets):
             s = s_entry['weapons']
