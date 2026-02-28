@@ -1,6 +1,8 @@
-# GAMMA Locker (Standalone)
+<p align="center">
+  <img src="docs/branding/gamma-locker-logo.png" alt="GAMMA Locker Logo" width="255" />
+</p>
 
-<img src="docs/branding/gamma-locker-logo.png" alt="GAMMA Locker Logo" width="102" />
+# GAMMA Locker (Standalone)
 
 GAMMA Locker is a local loadout planner and locker manager for STALKER GAMMA that can parse savegames (`.scop` / `.scoc`) to extract weapon IDs from your run. Depending on what is present in the save data, this can also surface weapons linked to stashes that are not opened yet in normal gameplay.
 
