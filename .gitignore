@@ -14,10 +14,8 @@ Thumbs.db
 .vscode/
 
 # Local runtime state (can be regenerated)
-loadout_lab_data/my_locker.json
-loadout_lab_data/my_locker_backup.json
-loadout_lab_data/__debug_*.png
-loadout_lab_data/tmp_*.png
+loadout_lab_data/**
+!loadout_lab_data/.gitkeep
 
 # Logs
 *.log

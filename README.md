@@ -1,11 +1,19 @@
 # GAMMA Loadout App (Standalone)
 
-Diese Version ist als **eigene, saubere App-Mappe** gedacht und enthält alles, was die Anwendung lokal benötigt:
+## Code-only Distribution (wichtig)
+
+Dieses Projekt wird für die Community als **Code-only** veröffentlicht.
+
+- Wir veröffentlichen **nur den Python-Code** und die Projektkonfiguration.
+- Jede Person erzeugt ihre eigenen Daten/Icons lokal aus der eigenen GAMMA/MO2-Installation.
+- Mod-Assets (Textures, DDS, extrahierte Icons) werden **nicht** als Release-Content verteilt.
+
+Diese Version ist als **eigene, saubere App-Mappe** gedacht und enthält die App-Komponenten:
 
 - `app.py` – Streamlit UI (Lager, Suche, Set-Planer)
 - `save_reader.py` – Savegame-Reader (`.scop/.scoc`)
 - `scraper.py` – Daten-/Icon-Generator aus GAMMA-Dateien
-- `loadout_lab_data/` – lokale Datenbasis (Stats, Icons, JSON)
+- `loadout_lab_data/` – lokaler Laufzeitordner (wird pro Nutzer:in lokal erzeugt/gefüllt)
 
 ---
 
@@ -98,9 +106,9 @@ In `scraper.py` sind Scan-/Texturpfade ebenfalls fest konfiguriert (`SCAN_PATHS`
 
 ---
 
-## 5) Daten neu erzeugen (optional)
+## 5) Daten neu erzeugen (erster Pflichtschritt)
 
-Wenn du Stats/Icons aus deiner Installation neu bauen willst:
+Vor der ersten Nutzung (oder nach Mod-Änderungen) musst du lokal scrapen:
 
 ```bash
 python3 scraper.py
@@ -111,6 +119,8 @@ Das schreibt/aktualisiert u. a.:
 - `loadout_lab_data/icons/*.png`
 
 Hinweis: Je nach Mod-Setup kann das einige Zeit dauern.
+
+Wenn `weapons_stats.csv` und Icons fehlen, kann die App nicht sinnvoll arbeiten.
 
 ---
 
@@ -163,6 +173,10 @@ Die Set-Erzeugung erzwingt immer eine vollständige Triad-Kombination.
 
 Dieses Verzeichnis hat ein eigenes Git-Repository (unabhängig vom alten Root-Ordner).
 So bleibt die App sauber getrennt von Savegame-/Test-/Restdateien im Hauptverzeichnis.
+
+Zusätzlich gilt für Releases:
+- `loadout_lab_data/`-Artefakte sind Build-/Runtime-Output und gehören nicht in veröffentlichte Code-Tags.
+- Release-Bundles sollten nur Code + Doku enthalten.
 
 ---
 
