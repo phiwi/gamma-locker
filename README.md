@@ -57,6 +57,35 @@ This project is distributed as **code only**.
 
 ---
 
+## Screenshots
+
+### 1) My Locker (start screen)
+Shows the locker overview where you manage your current weapon pool.
+
+![My Locker start screen](docs/screenshots/my_locker.png)
+
+### 2) Weapon Search
+Shows keyword-based search with quick add/remove actions and result stats.
+
+![Weapon Search screen](docs/screenshots/search.png)
+
+### 3) Set Score Distribution
+Histogram of generated set scores to compare quality spread across builds.
+
+![Set score distribution histogram](docs/screenshots/set_score_distribution.png)
+
+### 4) Weapons per Role & Most Common Calibers
+Role distribution and caliber frequency charts for your current locker.
+
+![Weapons per role and most common calibers](docs/screenshots/weapons_per_role_most_common_calibers.png)
+
+### 5) Random Roll Example
+Example output after using the random loadout roll in the planner.
+
+![Random rollout example set](docs/screenshots/roll_random_rollout.png)
+
+---
+
 ## Requirements
 
 - Python `3.10+`

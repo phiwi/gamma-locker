@@ -51,6 +51,11 @@ files = [
     'start_gamma_locker.sh',
     'start_gamma_locker.ps1',
     'start_gamma_locker.bat',
+    'docs/screenshots/my_locker.png',
+    'docs/screenshots/search.png',
+    'docs/screenshots/set_score_distribution.png',
+    'docs/screenshots/weapons_per_role_most_common_calibers.png',
+    'docs/screenshots/roll_random_rollout.png',
     'loadout_lab_data/.gitkeep',
 ]
 
