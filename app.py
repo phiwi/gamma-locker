@@ -464,7 +464,7 @@ else:
     st.sidebar.error("No savegames found.")
 
 # --- MAIN AREA ---
-st.title("☢️ GAMMA Balanced Locker Master")
+st.title("☢️ GAMMA Locker")
 t0, t1, t2 = st.tabs(["🎒 My Locker", "🔍 Weapon Search", "⚖️ Strategy Planner"])
 
 with t0:

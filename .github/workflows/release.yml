@@ -1,4 +1,4 @@
-name: Release (Code-Only ZIP)
+name: GAMMA Locker Release (Code-Only ZIP)
 
 on:
   push:

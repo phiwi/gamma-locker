@@ -4,14 +4,14 @@ $RepoDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $RepoDir
 
 if (-not (Test-Path "pyproject.toml")) {
-  throw "Run this script from gamma_loadout_app root (pyproject.toml missing)."
+  throw "Run this script from GAMMA Locker project root (pyproject.toml missing)."
 }
 
 $version = python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
 $version = $version.Trim()
 
 $OutDir = Join-Path $RepoDir "dist"
-$PkgName = "gamma-loadout-app-$version-code-only"
+$PkgName = "gamma-locker-$version-code-only"
 $StageDir = Join-Path $OutDir $PkgName
 $ZipPath = Join-Path $OutDir "$PkgName.zip"
 
@@ -29,6 +29,9 @@ $files = @(
   "scraper.py",
   "release.sh",
   "release.ps1",
+  "start_gamma_locker.sh",
+  "start_gamma_locker.ps1",
+  "start_gamma_locker.bat",
   "loadout_lab_data/.gitkeep"
 )
 

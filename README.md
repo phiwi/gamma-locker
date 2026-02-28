@@ -1,4 +1,4 @@
-# GAMMA Loadout App (Standalone)
+# GAMMA Locker (Standalone)
 
 ## Code-Only Distribution (Community Model)
 
@@ -16,6 +16,7 @@ This project is distributed as **code only**.
 - `save_reader.py` – Savegame parser (`.scop` / `.scoc`)
 - `scraper.py` – local data/icon extractor from game/mod files
 - `pyproject.toml` – dependencies and project metadata
+- `start_gamma_locker.sh` / `.ps1` / `.bat` – bootstrap launchers (auto-setup + start)
 - `loadout_lab_data/.gitkeep` – placeholder for local runtime data
 
 ---
@@ -70,11 +71,7 @@ This project is distributed as **code only**.
 - Optional for `scraper.py`:
   - ImageMagick (`convert`)
 
-Install dependencies:
-
-```bash
-python3 -m pip install streamlit pandas numpy pillow altair tqdm
-```
+Dependencies are installed automatically by the bootstrap launchers.
 
 ---
 
@@ -94,13 +91,28 @@ If these are missing, the app cannot provide meaningful output.
 
 ---
 
-## Run the App
+## Run GAMMA Locker (Bootstrap Launcher)
 
 From this folder:
 
+### Linux / WSL
 ```bash
-streamlit run app.py
+bash start_gamma_locker.sh
 ```
+
+### Windows (PowerShell)
+```powershell
+pwsh -File .\\start_gamma_locker.ps1
+```
+
+### Windows (double-click)
+- Run `start_gamma_locker.bat`
+
+The launcher will:
+- create `.venv` if missing
+- update `pip`
+- install project dependencies
+- start Streamlit (`app.py`)
 
 Then open `http://localhost:8501`.
 
@@ -126,7 +138,7 @@ In `scraper.py`, adjust if needed:
 ## Typical User Flow
 
 1. Run `python3 scraper.py`
-2. Start app: `streamlit run app.py`
+2. Start app: `bash start_gamma_locker.sh` (or a Windows launcher)
 3. Use **Weapon Search** to build locker
 4. Optionally import from savegame
 5. Open **Strategy Planner**
@@ -138,8 +150,8 @@ In `scraper.py`, adjust if needed:
 ## Troubleshooting
 
 ### App does not start
-- Check Python version: `python3 --version`
-- Reinstall dependencies
+- Check Python version: `python3 --version` (Linux/WSL) or `py -3 --version` (Windows)
+- Re-run the bootstrap launcher
 
 ### No savegames detected
 - Verify `SAVE_DIR`
@@ -168,8 +180,11 @@ In `scraper.py`, adjust if needed:
 # Generate local data
 python3 scraper.py
 
-# Run app
-streamlit run app.py
+# Run app (Linux/WSL bootstrap)
+bash start_gamma_locker.sh
+
+# Run app (PowerShell bootstrap)
+pwsh -File .\\start_gamma_locker.ps1
 
 # Build release ZIP (Linux/WSL)
 bash release.sh
