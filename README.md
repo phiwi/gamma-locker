@@ -1,5 +1,7 @@
 # GAMMA Locker (Standalone)
 
+GAMMA Locker is a local loadout planner and locker manager for STALKER GAMMA that can parse savegames (`.scop` / `.scoc`) to extract weapon IDs from your run. Depending on what is present in the save data, this can also surface weapons linked to stashes that are not opened yet in normal gameplay.
+
 ## Code-Only Distribution (Community Model)
 
 This project is distributed as **code only**.
@@ -33,6 +35,7 @@ This project is distributed as **code only**.
 - Read savegames from `SAVE_DIR`
 - Add-all or replace-all from save
 - Selective import
+- Can reveal weapon IDs present in save data, including stash-related entries (when present)
 
 ### Weapon Search
 - Multi-keyword search by ID/name
@@ -83,6 +86,11 @@ Role distribution and caliber frequency charts for your current locker.
 Example output after using the random loadout roll in the planner.
 
 ![Random rollout example set](docs/screenshots/roll_random_rollout.png)
+
+### Legal & Asset Credits
+- Weapon icons shown in screenshots are game/mod-derived assets from STALKER Anomaly / STALKER GAMMA installations.
+- These visuals are displayed for documentation/context only; this repository does not redistribute raw game archives.
+- Users should only generate and use icon/data exports from their own legally obtained installation and follow the original game/mod terms.
 
 ---
 
