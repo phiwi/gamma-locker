@@ -32,6 +32,8 @@ $files = @(
   "start_gamma_locker.sh",
   "start_gamma_locker.ps1",
   "start_gamma_locker.bat",
+  "docs/branding/gamma-locker-logo.png",
+  "docs/branding/gamma-locker-logo.svg",
   "docs/screenshots/my_locker.png",
   "docs/screenshots/search.png",
   "docs/screenshots/set_score_distribution.png",
