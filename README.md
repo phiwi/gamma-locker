@@ -37,18 +37,21 @@ This project is distributed as **code only**.
 - Bulk removal via checkboxes
 - Save/load local locker state
 - Backup restore
+- Empty-state quick actions (save import + starter random set)
 
 ### Savegame Import
 - Read savegames from `SAVE_DIR`
 - Add-all or replace-all from save
 - Selective import
 - Can reveal weapon IDs present in save data, including stash-related entries (when present)
+- Import summary feedback (`new`, `already present`, `found`)
 
 ### Weapon Search
 - Multi-keyword search by ID/name
 - Preview icons and stats
 - Direct add/remove from results
 - Melee/knife/axe entries filtered out
+- Render limit control + performance hint for large result sets
 
 ### Strategy Planner
 - Builds strict triad sets:
@@ -64,6 +67,10 @@ This project is distributed as **code only**.
 - RGBA compositing on black background
 - Per-icon R/B swap detection for mixed DDS exports
 - Fallback handling for invalid/transparent icons
+
+### Lean UX Helpers
+- Startup health check in sidebar (`paths_config.json`, `weapons_stats.csv`, `icons/*.png`)
+- Remembered UI defaults (assignment mode, set sorting, set search, search render limit)
 
 ---
 

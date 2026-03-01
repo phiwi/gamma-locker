@@ -12,6 +12,7 @@ from paths_config import get_path
 DATA_DIR = "loadout_lab_data"
 LOCKER_FILE = os.path.join(DATA_DIR, "my_locker.json")
 BACKUP_FILE = os.path.join(DATA_DIR, "my_locker_backup.json")
+UI_PREFS_FILE = os.path.join(DATA_DIR, "ui_prefs.json")
 SAVE_DIR = "/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/appdata/savedgames/"
 SAVE_DIR = str(get_path("save_dir", SAVE_DIR))
 
@@ -78,6 +79,67 @@ def restore_backup():
         save_l()
         return True
     return False
+
+def load_ui_prefs():
+    if os.path.exists(UI_PREFS_FILE):
+        try:
+            with open(UI_PREFS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+def save_ui_prefs():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    payload = {
+        "strategy_mode": st.session_state.get("strategy_mode", "Balanced"),
+        "sort_mode_sets": st.session_state.get("sort_mode_sets", "By score"),
+        "set_search_query": st.session_state.get("set_search_query", ""),
+        "search_result_limit": st.session_state.get("search_result_limit", 30),
+    }
+    with open(UI_PREFS_FILE, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+
+def init_ui_prefs():
+    prefs = load_ui_prefs()
+    defaults = {
+        "strategy_mode": "Balanced",
+        "sort_mode_sets": "By score",
+        "set_search_query": "",
+        "search_result_limit": 30,
+    }
+    for key, default_value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = prefs.get(key, default_value)
+
+def render_startup_health():
+    config_ok = os.path.exists("paths_config.json")
+    stats_ok = os.path.exists(os.path.join(DATA_DIR, "weapons_stats.csv"))
+    icon_dir = os.path.join(DATA_DIR, "icons")
+    icon_count = 0
+    if os.path.isdir(icon_dir):
+        try:
+            icon_count = sum(1 for name in os.listdir(icon_dir) if name.lower().endswith(".png"))
+        except Exception:
+            icon_count = 0
+    icons_ok = icon_count > 0
+
+    if config_ok and stats_ok and icons_ok:
+        st.sidebar.success("🩺 Startup health: ready")
+        return
+
+    st.sidebar.warning("🩺 Startup health: action needed")
+    with st.sidebar.expander("Show checks"):
+        st.write(f"paths_config.json: {'✅' if config_ok else '❌'}")
+        st.write(f"weapons_stats.csv: {'✅' if stats_ok else '❌'}")
+        st.write(f"icons/*.png: {'✅' if icons_ok else '❌'} ({icon_count} found)")
+        if not config_ok:
+            st.caption("Fix: create/update paths_config.json in project root.")
+        if not stats_ok:
+            st.caption("Fix: run python3 scraper.py to generate weapons_stats.csv.")
+        if not icons_ok:
+            st.caption("Fix: run python3 scraper.py to extract icon PNGs.")
 
 def prettify_ammo(ammo_raw):
     if pd.isna(ammo_raw):
@@ -175,7 +237,11 @@ def get_role(r):
     return "Workhorse"
 
 def load_data():
-    df = pd.read_csv(os.path.join(DATA_DIR, "weapons_stats.csv"))
+    stats_file = os.path.join(DATA_DIR, "weapons_stats.csv")
+    if not os.path.exists(stats_file):
+        st.error("Missing loadout_lab_data/weapons_stats.csv. Run: python3 scraper.py")
+        st.stop()
+    df = pd.read_csv(stats_file)
     # Drop melee/knife rows entirely (by class or name/id hints)
     melee_mask = df['class'].fillna('').str.lower().str.contains('knife|melee|axe|tomahawk', na=False)
     name_mask = df['real_name'].fillna('').str.lower().str.contains('knife|melee|axe|tomahawk', na=False)
@@ -193,6 +259,8 @@ df = load_data()
 
 if 'locker' not in st.session_state:
     st.session_state.locker = load_locker()
+
+init_ui_prefs()
 
 def is_ammo_conflict(w1, w2):
     if not w1 or not w2:
@@ -386,6 +454,7 @@ def calculate_all_sets(inventory_ids, strategy):
 
 
 # --- UI SIDEBAR ---
+render_startup_health()
 st.sidebar.title("🎒 Locker Controls")
 col_b1, col_b2 = st.sidebar.columns(2)
 if col_b1.button("💾 Save"):
@@ -422,20 +491,30 @@ if saves:
             all_ids = df['id'].unique().tolist()
             found = extract_weapons_from_scop(os.path.join(SAVE_DIR, selected_save), all_ids)
             if found:
-                st.session_state.locker = list(set(st.session_state.locker + found))
+                before = set(st.session_state.locker)
+                unique_found = list(dict.fromkeys(found))
+                new_count = sum(1 for item in unique_found if item not in before)
+                already_count = len(unique_found) - new_count
+                st.session_state.locker = list(before.union(unique_found))
                 save_l()
-                st.sidebar.success(f"Added {len(found)} weapons!")
+                st.sidebar.success(f"Import summary: {new_count} new, {already_count} already present (found: {len(unique_found)}).")
                 st.rerun()
+            else:
+                st.sidebar.warning("No known weapons found in this savegame.")
     
     if col_sync2.button("🔄 Replace all"):
         with st.spinner("Scanning savegame..."):
             all_ids = df['id'].unique().tolist()
             found = extract_weapons_from_scop(os.path.join(SAVE_DIR, selected_save), all_ids)
             if found:
-                st.session_state.locker = found
+                previous_count = len(st.session_state.locker)
+                unique_found = list(dict.fromkeys(found))
+                st.session_state.locker = unique_found
                 save_l()
-                st.sidebar.success(f"Synced {len(found)} weapons!")
+                st.sidebar.success(f"Replace summary: now {len(unique_found)} weapons (previously {previous_count}).")
                 st.rerun()
+            else:
+                st.sidebar.warning("No known weapons found in this savegame.")
 
     # Selective import
     with st.sidebar.expander("🔍 Import selected weapons"):
@@ -456,10 +535,13 @@ if saves:
                 selected_to_add = st.multiselect("Select found weapons:", list(options_map.keys()))
                 if st.button("➕ Add selection"):
                     ids_to_add = [options_map[sel] for sel in selected_to_add]
-                    st.session_state.locker = list(set(st.session_state.locker + ids_to_add))
-                    save_l()
-                    st.success(f"Imported {len(ids_to_add)} weapons!")
-                    st.rerun()
+                    if ids_to_add:
+                        st.session_state.locker = list(set(st.session_state.locker + ids_to_add))
+                        save_l()
+                        st.success(f"Imported {len(ids_to_add)} selected weapons.")
+                        st.rerun()
+                    else:
+                        st.info("No weapons selected.")
             else:
                 st.write("All weapons from this save are already in your locker.")
 else:
@@ -473,6 +555,30 @@ with t0:
     st.header(f"Contents ({len(st.session_state.locker)} weapons)")
     if not st.session_state.locker:
         st.info("Your locker is empty. Use search or savegame import to add weapons.")
+        q1, q2 = st.columns(2)
+        with q1:
+            if saves:
+                quick_save = st.selectbox("Quick import from savegame", saves, key="quick_empty_save")
+                if st.button("📥 Import all from selected save", key="quick_empty_import"):
+                    all_ids = df['id'].unique().tolist()
+                    found_quick = extract_weapons_from_scop(os.path.join(SAVE_DIR, quick_save), all_ids)
+                    if found_quick:
+                        unique_found = list(dict.fromkeys(found_quick))
+                        st.session_state.locker = list(set(st.session_state.locker + unique_found))
+                        save_l()
+                        st.success(f"Imported {len(unique_found)} weapons from savegame.")
+                        st.rerun()
+                    else:
+                        st.warning("No known weapons found in selected savegame.")
+            else:
+                st.caption("No savegames found in configured SAVE_DIR.")
+        with q2:
+            if st.button("🎲 Add 20 random starter weapons", key="quick_random_20"):
+                count = min(20, len(df))
+                st.session_state.locker = df['id'].sample(count).tolist()
+                save_l()
+                st.success(f"Added {count} random weapons.")
+                st.rerun()
     else:
         # Compact table view for locker
         locker_df = df[df['id'].isin(st.session_state.locker)].copy()
@@ -555,6 +661,14 @@ with t1:
         # Drop duplicate display names
         hits = hits.drop_duplicates(subset=['pretty_name'])
         st.write(f"{len(hits)} matches")
+        result_limit = st.select_slider(
+            "Rendered result limit",
+            options=[15, 30, 50, 100],
+            key="search_result_limit",
+            help="Limits rendered rows to keep the UI fast on large result sets."
+        )
+        if len(hits) > result_limit:
+            st.caption(f"Performance mode: showing top {result_limit} of {len(hits)} matches.")
         
         # Prepare table for search results
         if not hits.empty:
@@ -566,9 +680,10 @@ with t1:
             
             # Update hits with rank columns
             hits = df.loc[hits.index]
+            render_hits = hits.head(result_limit)
             
-            # Show top 15 detailed rows with add/remove buttons
-            for _, r in hits.head(15).iterrows():
+            # Show top-N detailed rows with add/remove buttons
+            for _, r in render_hits.iterrows():
                 c_img, c_txt, c_btn = st.columns([1, 4, 1])
                 img_path = f"loadout_lab_data/icons/{r['id']}.png"
                 img = load_icon_image(img_path)
@@ -591,7 +706,7 @@ with t1:
             st.subheader("📊 Detailed stats for search results")
             
             # Format dataframe for display
-            display_df = hits[['pretty_name', 'class', 'global_rank', 'class_rank', 'hit', 'rpm', 'rec', 'mag', 'score']].copy()
+            display_df = render_hits[['pretty_name', 'class', 'global_rank', 'class_rank', 'hit', 'rpm', 'rec', 'mag', 'score']].copy()
             display_df.columns = ['Name', 'Class', 'Global Rank', 'Class Rank', 'Damage', 'RPM', 'Recoil', 'Mag Size', 'Score']
             
             # Formatting
@@ -605,6 +720,8 @@ with t1:
             display_df['RPM'] = display_df['RPM'].astype(int)
             
             st.dataframe(display_df.sort_values('Score', ascending=False), width='stretch', hide_index=True)
+
+    save_ui_prefs()
 
 with t2:
     if len(st.session_state.locker) < 3:
@@ -622,7 +739,7 @@ with t2:
             f"Theoretical unique sets (without reuse): {max_non_redundant_sets}"
         )
 
-        strat = st.radio("Assignment mode:", ["Balanced", "Maxxed"], horizontal=True)
+        strat = st.radio("Assignment mode:", ["Balanced", "Maxxed"], horizontal=True, key="strategy_mode")
         res_sets = calculate_all_sets(st.session_state.locker, strat)
 
         # Helper for set classification (color badges) and distribution
@@ -758,7 +875,7 @@ with t2:
         sort_mode = st.radio("Set sorting:", ["By score", "By build order"], horizontal=True, key="sort_mode_sets")
 
         # Search input for filtering sets
-        set_search = st.text_input("🔎 Search sets (e.g. spas12)", value="", key="set_search_query")
+        set_search = st.text_input("🔎 Search sets (e.g. spas12)", key="set_search_query")
 
         # Apply sorting
         if sort_mode == "By score":
@@ -838,3 +955,5 @@ with t2:
                         st.write(f"⭐ Score: {w['score']:.3f}")
                         st.progress(min(max(w['score'] / 100.0, 0.0), 1.0))
                     seen_ids.add(w['id'])
+
+    save_ui_prefs()
