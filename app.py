@@ -525,16 +525,37 @@ if saves:
             new_options = [w_id for w_id in found_in_save if w_id not in st.session_state.locker]
             
             if new_options:
-                # Build human-readable option labels
-                options_map = {}
+                rows = []
                 for w_id in new_options:
                     row = df[df['id'] == w_id]
-                    name = row['pretty_name'].values[0] if not row.empty else w_id
-                    options_map[f"{name} ({w_id})"] = w_id
-                
-                selected_to_add = st.multiselect("Select found weapons:", list(options_map.keys()))
-                if st.button("➕ Add selection"):
-                    ids_to_add = [options_map[sel] for sel in selected_to_add]
+                    if not row.empty:
+                        rows.append({
+                            "Add": False,
+                            "_ID": w_id,
+                            "Name": row['pretty_name'].values[0],
+                        })
+                    else:
+                        rows.append({
+                            "Add": False,
+                            "_ID": w_id,
+                            "Name": w_id,
+                        })
+
+                selectable_df = pd.DataFrame(rows)
+                edited_select_df = st.data_editor(
+                    selectable_df,
+                    hide_index=True,
+                    width='stretch',
+                    disabled=['_ID', 'Name'],
+                    column_config={
+                        "Add": st.column_config.CheckboxColumn("Add", default=False),
+                        "_ID": None,
+                    },
+                    key=f"save_import_select_table_{selected_save}"
+                )
+
+                if st.button("➕ Add selected"):
+                    ids_to_add = edited_select_df[edited_select_df['Add'] == True]['_ID'].tolist()
                     if ids_to_add:
                         st.session_state.locker = list(set(st.session_state.locker + ids_to_add))
                         save_l()
