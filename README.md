@@ -228,6 +228,28 @@ No code edits are required for normal path setup.
 - Do not publish generated `loadout_lab_data` artifacts
 - Tag releases with source + docs only
 
+### Download & Verify (SHA256)
+
+Latest release page:
+- `https://github.com/phiwi/gamma-locker/releases/latest`
+
+Example (Linux/macOS):
+
+```bash
+curl -L -o gamma-locker.zip https://github.com/phiwi/gamma-locker/releases/download/v0.1.2/gamma-locker-0.1.2-code-only.zip
+sha256sum gamma-locker.zip
+```
+
+Example (PowerShell):
+
+```powershell
+Invoke-WebRequest -Uri "https://github.com/phiwi/gamma-locker/releases/download/v0.1.2/gamma-locker-0.1.2-code-only.zip" -OutFile "gamma-locker.zip"
+Get-FileHash .\gamma-locker.zip -Algorithm SHA256
+```
+
+Expected SHA256 for `v0.1.2`:
+- `427fa3493647e2819a451dc0feef40013b7098f0d2c7be0347091d01e10652c5`
+
 ---
 
 ## Useful Commands
