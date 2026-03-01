@@ -9,13 +9,18 @@ if [[ ! -f pyproject.toml ]]; then
   exit 1
 fi
 
-VERSION="$(python3 - <<'PY'
+VERSION_FROM_TAG="${GITHUB_REF_NAME:-}"
+VERSION_FROM_TAG="${VERSION_FROM_TAG#v}"
+
+VERSION_FROM_PROJECT="$(python3 - <<'PY'
 import tomllib
 with open('pyproject.toml', 'rb') as f:
     data = tomllib.load(f)
 print(data['project']['version'])
 PY
 )"
+
+VERSION="${VERSION_FROM_TAG:-$VERSION_FROM_PROJECT}"
 
 OUT_DIR="dist"
 PKG_NAME="gamma-locker-${VERSION}-code-only"
@@ -24,8 +29,9 @@ ZIP_PATH="${OUT_DIR}/${PKG_NAME}.zip"
 mkdir -p "$OUT_DIR"
 rm -f "$ZIP_PATH"
 
-python3 - <<'PY'
+PACKAGE_VERSION="$VERSION" python3 - <<'PY'
 from pathlib import Path
+import os
 import tomllib
 import zipfile
 
@@ -33,8 +39,10 @@ root = Path('.')
 out_dir = root / 'dist'
 out_dir.mkdir(exist_ok=True)
 
-with open(root / 'pyproject.toml', 'rb') as f:
-    version = tomllib.load(f)['project']['version']
+version = os.environ.get('PACKAGE_VERSION')
+if not version:
+    with open(root / 'pyproject.toml', 'rb') as f:
+        version = tomllib.load(f)['project']['version']
 
 pkg_name = f'gamma-locker-{version}-code-only'
 zip_path = out_dir / f'{pkg_name}.zip'

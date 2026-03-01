@@ -7,8 +7,18 @@ if (-not (Test-Path "pyproject.toml")) {
   throw "Run this script from GAMMA Locker project root (pyproject.toml missing)."
 }
 
-$version = python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
-$version = $version.Trim()
+$versionFromTag = $env:GITHUB_REF_NAME
+if ($versionFromTag) {
+  $versionFromTag = $versionFromTag.Trim()
+  if ($versionFromTag.StartsWith("v")) {
+    $versionFromTag = $versionFromTag.Substring(1)
+  }
+}
+
+$versionFromProject = python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
+$versionFromProject = $versionFromProject.Trim()
+
+$version = if ($versionFromTag) { $versionFromTag } else { $versionFromProject }
 
 $OutDir = Join-Path $RepoDir "dist"
 $PkgName = "gamma-locker-$version-code-only"
