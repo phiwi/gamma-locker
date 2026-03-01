@@ -16,7 +16,7 @@ UI_PREFS_FILE = os.path.join(DATA_DIR, "ui_prefs.json")
 SAVE_DIR = "/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/appdata/savedgames/"
 SAVE_DIR = str(get_path("save_dir", SAVE_DIR))
 
-# --- CONFIG & REGELN ---
+# --- CONFIG & RULES ---
 GROUP_LIGHT = ['5.45x39', '5.56x45', '7.62x39', '9x39']
 GROUP_HEAVY = ['7.62x51', '7.62x54', '12.7x55', '.300', '.338', '23x75', '12x76']
 POWER_AMMO = GROUP_HEAVY + ['9x39', '23x75', '12x76']
@@ -806,7 +806,7 @@ with t2:
 
             st.subheader("Set distribution by color")
             dist_df = pd.DataFrame([
-                {"Kategorie": k, "Anzahl": v} for k, v in type_counts.items()
+                {"Category": k, "Count": v} for k, v in type_counts.items()
             ])
             order = ["Triad clean", "Hybrid clean", "Triad +1R", "Hybrid +1R", "Multi-Redundant"]
             colors = ["#2ecc71", "#3498db", "#5dade2", "#e67e22", "#e74c3c"]
@@ -814,9 +814,9 @@ with t2:
                 alt.Chart(dist_df)
                 .mark_bar()
                 .encode(
-                    x=alt.X("Kategorie", sort=order),
-                    y=alt.Y("Anzahl"),
-                    color=alt.Color("Kategorie", scale=alt.Scale(domain=order, range=colors), legend=None)
+                    x=alt.X("Category", sort=order),
+                    y=alt.Y("Count"),
+                    color=alt.Color("Category", scale=alt.Scale(domain=order, range=colors), legend=None)
                 )
                 .properties(width="container")
             )

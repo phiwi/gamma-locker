@@ -3,38 +3,38 @@ import os, re
 def get_savegames(save_dir):
     if not os.path.exists(save_dir): return []
     files = [f for f in os.listdir(save_dir) if f.endswith('.scop')]
-    # Sortiert nach Änderungsdatum (neueste zuerst)
+    # Sort by modification time (newest first)
     files.sort(key=lambda x: os.path.getmtime(os.path.join(save_dir, x)), reverse=True)
     return files
 
 def extract_weapons_from_scop(file_path, all_known_weapons):
     """
-    Versucht Waffen-IDs aus einer binären .scop Datei zu extrahieren.
-    Optimiert um nur tatsächliche Inventar-Items (nicht Modellpfade oder Welt-Stats) zu finden.
+    Attempts to extract weapon IDs from a binary .scop file.
+    Optimized to keep real inventory items and ignore model paths/world stats noise.
     """
     if not os.path.exists(file_path):
         return []
     try:
         known = sorted(set(all_known_weapons), key=len, reverse=True)
-        # Junk-IDs, die oft in Welt-Daten erscheinen:
+        # Junk IDs that often appear in world data.
         junk_ids = {'wpn_binoc', 'wpn_knife', 'wpn_grenade', 'wpn_bolt'}
 
-        # Primärquelle: .scoc enthält kompaktere/actor-nahe Metadaten
+        # Primary source: .scoc often contains compact actor-adjacent metadata.
         scoc_path = file_path[:-5] + ".scoc" if file_path.lower().endswith(".scop") else file_path
         source_path = scoc_path if os.path.exists(scoc_path) else file_path
 
         import mmap
         with open(source_path, 'rb') as f:
-            # Nutze mmap für effiziente Suche in großen Dateien
+            # Use mmap for efficient scanning in large files.
             with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                 content = mm[:]
 
-        # ASCII-Tokens aus Binärdaten extrahieren
-        # Wir suchen nach allen Vorkommen von 'wpn_', gefolgt von Buchstaben/Zahlen.
-        # Im Savegame stehen oft Pfade oder technische Namen mit Anhängseln (wpn_ak74_up12345).
+        # Extract ASCII-like tokens from binary data.
+        # Find all occurrences of 'wpn_' followed by letters/numbers/underscores.
+        # Save data often contains paths or technical names with numeric tails (wpn_ak74_up12345).
         text = content.decode("latin-1", errors="ignore").lower()
         
-        # Token-Extraktion (Alles was wie eine Waffen-ID aussieht)
+        # Token extraction (everything that looks like a weapon ID)
         tokens = re.findall(r"(wpn_[a-z0-9_]+)", text)
         
         found = set()
@@ -42,19 +42,19 @@ def extract_weapons_from_scop(file_path, all_known_weapons):
             if any(j in token for j in junk_ids): continue
             if "_hud" in token: continue
             
-            # Entferne die numerische Objekt-ID am Ende (z.B. wpn_ak74_12345 -> wpn_ak74_)
+            # Remove numeric object-ID tail (e.g. wpn_ak74_12345 -> wpn_ak74_)
             base_token = re.sub(r"[0-9]+$", "", token)
             if not base_token: continue
             
-            # Wir suchen das längste bekannte Präfix im Token.
-            # Beispiel: Token 'wpn_svds_pmc_gee3612345'
-            # known enthält 'wpn_svds_pmc_gee36' und 'wpn_svds_pmc'.
-            # Wir wollen die spezifischere ID (gee36) finden.
+            # Find the longest known prefix in token.
+            # Example: token 'wpn_svds_pmc_gee3612345'
+            # known contains 'wpn_svds_pmc_gee36' and 'wpn_svds_pmc'.
+            # We want the more specific ID (gee36).
             best_match = None
             for w_id in known:
                 if token.startswith(w_id):
-                    # Checke ob nach der ID nur noch Zahlen kommen (die Objekt-ID)
-                    # oder ob wir gerade ein Attachment-Suffix matchen.
+                    # Ensure suffix is empty or numeric object tail only,
+                    # not an attachment/variant suffix.
                     suffix = token[len(w_id):]
                     if not suffix or suffix.isdigit():
                         if best_match is None or len(w_id) > len(best_match):
@@ -62,8 +62,6 @@ def extract_weapons_from_scop(file_path, all_known_weapons):
             
             if best_match:
                 found.add(best_match)
-
-        return sorted(found)
 
         return sorted(found)
     except Exception as e:
