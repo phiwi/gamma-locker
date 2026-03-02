@@ -336,9 +336,17 @@ def is_valid_pair(w1, w2):
 def is_valid_set(s, p, wh):
     return is_valid_pair(s, p) and is_valid_pair(s, wh) and is_valid_pair(p, wh)
 
-def calculate_all_sets(inventory_ids, strategy):
+def calculate_all_sets(inventory_ids, strategy, score_mode):
     all_w_df = df[df['id'].isin(inventory_ids)].copy()
     all_w_df['role_label'] = all_w_df.apply(get_role, axis=1)
+
+    if strategy == "Maxxed":
+        score_field = 'raw_score'
+    else:
+        score_field = 'raw_score' if score_mode == "Absolute" else 'class_norm_score'
+
+    def score_of(w):
+        return float(w.get(score_field, w.get('score', 0)))
 
     def is_close_hybrid_row(r):
         if get_role(r) == "Sidearm":
@@ -371,13 +379,13 @@ def calculate_all_sets(inventory_ids, strategy):
     if not sidearms or not powers or not workhorses:
         return []
 
-    avg_s = all_sidearms_df['score'].mean() if not all_sidearms_df.empty else 0
-    avg_p = all_w_df[all_w_df['role_label'] == 'Power']['score'].mean() if not all_w_df[all_w_df['role_label'] == 'Power'].empty else 0
-    avg_wh = all_w_df[all_w_df['role_label'] == 'Workhorse']['score'].mean() if not all_w_df[all_w_df['role_label'] == 'Workhorse'].empty else 0
+    avg_s = all_sidearms_df[score_field].mean() if not all_sidearms_df.empty else 0
+    avg_p = all_w_df[all_w_df['role_label'] == 'Power'][score_field].mean() if not all_w_df[all_w_df['role_label'] == 'Power'].empty else 0
+    avg_wh = all_w_df[all_w_df['role_label'] == 'Workhorse'][score_field].mean() if not all_w_df[all_w_df['role_label'] == 'Workhorse'].empty else 0
     target_average_score = avg_s + avg_p + avg_wh
 
     def get_fitness(w_set, target_avg):
-        total_score = sum(w['score'] for w in w_set if w)
+        total_score = sum(score_of(w) for w in w_set if w)
         if strategy == "Maxxed":
             return total_score
         return -abs(target_avg - total_score)
@@ -390,7 +398,12 @@ def calculate_all_sets(inventory_ids, strategy):
         for w in triple:
             if w:
                 usage[w['id']] += 1
-        final_sets.append({"weapons": [dict(w) for w in triple], "phase": phase, "order": order_idx})
+        weapon_payload = []
+        for w in triple:
+            w_copy = dict(w)
+            w_copy['score'] = score_of(w)
+            weapon_payload.append(w_copy)
+        final_sets.append({"weapons": weapon_payload, "phase": phase, "order": order_idx})
 
     def redundant_count(triple):
         return sum(1 for w in triple if w and usage[w['id']] > 0)
@@ -819,7 +832,10 @@ with t2:
         )
 
         strat = st.radio("Assignment mode:", ["Balanced", "Maxxed"], horizontal=True, key="strategy_mode")
-        res_sets = calculate_all_sets(st.session_state.locker, strat)
+        active_score_mode = st.session_state.get('score_mode', 'Class-normalized')
+        if strat == "Maxxed":
+            st.caption("Maxxed uses absolute raw weapon scores for strongest-loadout ranking.")
+        res_sets = calculate_all_sets(st.session_state.locker, strat, active_score_mode)
 
         # Helper for set classification (color badges) and distribution
         def is_close_hybrid_disp(w):

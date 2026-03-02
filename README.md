@@ -67,6 +67,7 @@ This project is distributed as **code only**.
 ### Scoring Logic
 - `Absolute`: raw formula score (`hit * rpm / rec + mag * 0.5`).
 - `Class-normalized` (default): normalizes score percentiles inside weapon-type buckets (e.g. Shotgun, SMG, DMR, Bolt-Action Sniper) to improve cross-type comparability in planning.
+- `Maxxed` strategy always uses absolute raw scores for set ranking, so highest-output weapons are prioritized directly.
 
 ### Icon Handling
 - RGBA compositing on black background
