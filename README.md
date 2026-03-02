@@ -247,19 +247,19 @@ Latest release page:
 Example (Linux/macOS):
 
 ```bash
-curl -L -o gamma-locker.zip https://github.com/phiwi/gamma-locker/releases/download/v0.1.2/gamma-locker-0.1.2-code-only.zip
+curl -L -o gamma-locker.zip https://github.com/phiwi/gamma-locker/releases/download/v0.1.5/gamma-locker-0.1.5-code-only.zip
 sha256sum gamma-locker.zip
 ```
 
 Example (PowerShell):
 
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/phiwi/gamma-locker/releases/download/v0.1.2/gamma-locker-0.1.2-code-only.zip" -OutFile "gamma-locker.zip"
+Invoke-WebRequest -Uri "https://github.com/phiwi/gamma-locker/releases/download/v0.1.5/gamma-locker-0.1.5-code-only.zip" -OutFile "gamma-locker.zip"
 Get-FileHash .\gamma-locker.zip -Algorithm SHA256
 ```
 
-Expected SHA256 for `v0.1.2`:
-- `427fa3493647e2819a451dc0feef40013b7098f0d2c7be0347091d01e10652c5`
+Expected SHA256 for `v0.1.5`:
+- `5f4b3228afa0779cf3c8eb46d4f322d40cebfb5b6b378cf454a248e8e189f89d`
 
 ---
 
