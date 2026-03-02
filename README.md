@@ -59,9 +59,14 @@ This project is distributed as **code only**.
   - `1 Power`
   - `1 Workhorse`
 - Modes: `Balanced` and `Maxxed`
+- Score modes: `Class-normalized` (default) and `Absolute`
 - Phase pipeline (`P1`, `P2H0`, `P1R1`, `P2H1`, `P3`)
 - Badge-based hybrid/redundancy classification
 - Sorting, set search, random roll
+
+### Scoring Logic
+- `Absolute`: raw formula score (`hit * rpm / rec + mag * 0.5`).
+- `Class-normalized` (default): normalizes score percentiles inside weapon-type buckets (e.g. Shotgun, SMG, DMR, Bolt-Action Sniper) to improve cross-type comparability in planning.
 
 ### Icon Handling
 - RGBA compositing on black background

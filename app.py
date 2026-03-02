@@ -97,6 +97,7 @@ def save_ui_prefs():
         "sort_mode_sets": st.session_state.get("sort_mode_sets", "By score"),
         "set_search_query": st.session_state.get("set_search_query", ""),
         "search_result_limit": st.session_state.get("search_result_limit", 30),
+        "score_mode": st.session_state.get("score_mode", "Class-normalized"),
     }
     with open(UI_PREFS_FILE, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
@@ -108,6 +109,7 @@ def init_ui_prefs():
         "sort_mode_sets": "By score",
         "set_search_query": "",
         "search_result_limit": 30,
+        "score_mode": "Class-normalized",
     }
     for key, default_value in defaults.items():
         if key not in st.session_state:
@@ -141,6 +143,13 @@ def render_startup_health():
         if not icons_ok:
             st.caption("Fix: run python3 scraper.py to extract icon PNGs.")
 
+def apply_score_mode_to_df():
+    score_mode = st.session_state.get("score_mode", "Class-normalized")
+    if score_mode == "Absolute":
+        df['score'] = df['raw_score']
+    else:
+        df['score'] = df['class_norm_score']
+
 def prettify_ammo(ammo_raw):
     if pd.isna(ammo_raw):
         return ""
@@ -153,6 +162,39 @@ def compute_score(row):
     rec = max(float(row.get('rec', 0)), 0.01)
     mag = float(row.get('mag', 0))
     return (hit * rpm) / rec + (mag * 0.5)
+
+def get_score_bucket(row):
+    cls_raw = str(row.get('class', '')).lower()
+    rpm = float(row.get('rpm', 0) or 0)
+
+    if 'sniper/dmr' in cls_raw:
+        return 'DMR' if rpm >= 120 else 'Bolt-Action Sniper'
+    if 'smg/pdw' in cls_raw:
+        return 'SMG/PDW'
+    if 'battle rifle' in cls_raw:
+        return 'Battle Rifle'
+    if 'assault rifle' in cls_raw:
+        return 'Assault Rifle'
+    if 'shotgun' in cls_raw:
+        return 'Shotgun'
+    if 'lmg' in cls_raw:
+        return 'LMG'
+    if 'sidearm heavy' in cls_raw:
+        return 'Sidearm Heavy'
+    if 'pistol' in cls_raw:
+        return 'Pistol'
+    if 'smg' in cls_raw:
+        return 'SMG'
+    return str(row.get('class', 'Unknown'))
+
+def compute_class_normalized_scores(df_local):
+    ranked = (
+        df_local
+        .groupby('score_bucket')['raw_score']
+        .rank(method='average', pct=True)
+        .fillna(0)
+    )
+    return ranked * 100.0
 
 def load_icon_image(path):
     def open_visible_rgba(p):
@@ -251,7 +293,10 @@ def load_data():
     df['ammo_display'] = df['ammo'].apply(prettify_ammo)
     if 'mutant_killer' not in df.columns:
         df['mutant_killer'] = False
-    df['score'] = df.apply(compute_score, axis=1)
+    df['raw_score'] = df.apply(compute_score, axis=1)
+    df['score_bucket'] = df.apply(get_score_bucket, axis=1)
+    df['class_norm_score'] = compute_class_normalized_scores(df)
+    df['score'] = df['class_norm_score']
     df['role_label'] = df.apply(get_role, axis=1)
     return df
 
@@ -261,6 +306,7 @@ if 'locker' not in st.session_state:
     st.session_state.locker = load_locker()
 
 init_ui_prefs()
+apply_score_mode_to_df()
 
 def is_ammo_conflict(w1, w2):
     if not w1 or not w2:
@@ -478,6 +524,17 @@ if st.sidebar.button("🎲 Load 50 random weapons"):
     st.session_state.locker = df['id'].sample(50).tolist()
     save_l()
     st.rerun()
+
+st.sidebar.divider()
+st.sidebar.subheader("📈 Scoring")
+st.sidebar.radio(
+    "Score mode",
+    ["Class-normalized", "Absolute"],
+    key="score_mode",
+    help="Class-normalized compares weapons within their weapon type. Absolute uses the raw formula score."
+)
+apply_score_mode_to_df()
+save_ui_prefs()
 
 st.sidebar.divider()
 st.sidebar.subheader("🔌 Savegame import")
@@ -748,6 +805,7 @@ with t2:
     if len(st.session_state.locker) < 3:
         st.warning("Add at least 3 weapons to generate sets.")
     else:
+        st.caption(f"Scoring mode: {st.session_state.get('score_mode', 'Class-normalized')}")
         # Diagnostics: role distribution in current locker
         locker_role_df = df[df['id'].isin(st.session_state.locker)].copy()
         role_counts_diag = locker_role_df['role_label'].value_counts()
