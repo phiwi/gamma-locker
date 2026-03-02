@@ -98,6 +98,7 @@ def save_ui_prefs():
         "set_search_query": st.session_state.get("set_search_query", ""),
         "search_result_limit": st.session_state.get("search_result_limit", 30),
         "score_mode": st.session_state.get("score_mode", "Class-normalized"),
+        "strict_workhorse_maxxed": st.session_state.get("strict_workhorse_maxxed", False),
     }
     with open(UI_PREFS_FILE, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
@@ -110,6 +111,7 @@ def init_ui_prefs():
         "set_search_query": "",
         "search_result_limit": 30,
         "score_mode": "Class-normalized",
+        "strict_workhorse_maxxed": False,
     }
     for key, default_value in defaults.items():
         if key not in st.session_state:
@@ -336,7 +338,7 @@ def is_valid_pair(w1, w2):
 def is_valid_set(s, p, wh):
     return is_valid_pair(s, p) and is_valid_pair(s, wh) and is_valid_pair(p, wh)
 
-def calculate_all_sets(inventory_ids, strategy, score_mode):
+def calculate_all_sets(inventory_ids, strategy, score_mode, strict_workhorse_maxxed=False):
     all_w_df = df[df['id'].isin(inventory_ids)].copy()
     all_w_df['role_label'] = all_w_df.apply(get_role, axis=1)
 
@@ -372,16 +374,19 @@ def calculate_all_sets(inventory_ids, strategy, score_mode):
     sidearms = all_sidearms_df.to_dict('records')
     powers = [w for w in all_w if w['role_label'] == 'Power']
     workhorses = [w for w in all_w if w['role_label'] == 'Workhorse']
-    hybrids_close = [w for w in workhorses if is_close_hybrid_row(w)]
+    strict_mode_active = strategy == "Maxxed" and strict_workhorse_maxxed
+    workhorse_pool = [w for w in workhorses if not is_close_hybrid_row(w)] if strict_mode_active else workhorses
+    hybrids_close = [] if strict_mode_active else [w for w in workhorses if is_close_hybrid_row(w)]
 
     if not all_w:
         return []
-    if not sidearms or not powers or not workhorses:
+    if not sidearms or not powers or not workhorse_pool:
         return []
 
     avg_s = all_sidearms_df[score_field].mean() if not all_sidearms_df.empty else 0
     avg_p = all_w_df[all_w_df['role_label'] == 'Power'][score_field].mean() if not all_w_df[all_w_df['role_label'] == 'Power'].empty else 0
-    avg_wh = all_w_df[all_w_df['role_label'] == 'Workhorse'][score_field].mean() if not all_w_df[all_w_df['role_label'] == 'Workhorse'].empty else 0
+    workhorse_pool_df = pd.DataFrame(workhorse_pool)
+    avg_wh = workhorse_pool_df[score_field].mean() if not workhorse_pool_df.empty else 0
     target_average_score = avg_s + avg_p + avg_wh
 
     def get_fitness(w_set, target_avg):
@@ -454,7 +459,7 @@ def calculate_all_sets(inventory_ids, strategy, score_mode):
     while True:
         best = None
         best_f = -1e18
-        for p, wh, s in product(powers, workhorses, sidearms):
+        for p, wh, s in product(powers, workhorse_pool, sidearms):
             rcount = redundant_count((p, wh, s))
             fresh = sum(1 for w in (p, wh, s) if usage[w['id']] == 0)
             if rcount != 1 or fresh < 2:
@@ -492,7 +497,7 @@ def calculate_all_sets(inventory_ids, strategy, score_mode):
     while True:
         best = None
         best_f = -1e18
-        for p, wh, s in product(powers, workhorses, sidearms):
+        for p, wh, s in product(powers, workhorse_pool, sidearms):
             triple = (p, wh, s)
             fresh = any(usage[x['id']] == 0 for x in triple)
             if not fresh and len(final_sets) > 0:
@@ -833,9 +838,24 @@ with t2:
 
         strat = st.radio("Assignment mode:", ["Balanced", "Maxxed"], horizontal=True, key="strategy_mode")
         active_score_mode = st.session_state.get('score_mode', 'Class-normalized')
+        strict_workhorse_maxxed = st.checkbox(
+            "Strict Workhorse (Maxxed only)",
+            key="strict_workhorse_maxxed",
+            help="When enabled, Maxxed only uses non-hybrid Workhorse candidates (excludes Shotgun/SMG slot!=1 and pistol-caliber non-sidearm entries)."
+        )
         if strat == "Maxxed":
-            st.caption("Maxxed uses absolute raw weapon scores for strongest-loadout ranking.")
-        res_sets = calculate_all_sets(st.session_state.locker, strat, active_score_mode)
+            if strict_workhorse_maxxed:
+                st.caption("Maxxed label: Absolute raw scoring + strict non-hybrid Workhorse pool.")
+            else:
+                st.caption("Maxxed label: Absolute raw scoring; hybrid Workhorses can rank high.")
+        else:
+            st.caption("Balanced label: Uses selected score mode with phase-aware set balancing.")
+        res_sets = calculate_all_sets(
+            st.session_state.locker,
+            strat,
+            active_score_mode,
+            strict_workhorse_maxxed=strict_workhorse_maxxed
+        )
 
         # Helper for set classification (color badges) and distribution
         def is_close_hybrid_disp(w):
@@ -857,6 +877,18 @@ with t2:
             if redundant_count == 1:
                 return ("🟧", "Hybrid +1R") if has_hybrid else ("🩵", "Triad +1R")
             return "🟥", "Multi-Redundant"
+
+        workhorse_candidates = locker_role_df[locker_role_df['role_label'] == 'Workhorse']
+        strict_workhorse_candidates = workhorse_candidates[~workhorse_candidates.apply(is_close_hybrid_disp, axis=1)]
+        active_pool_size = len(strict_workhorse_candidates) if (strat == "Maxxed" and strict_workhorse_maxxed) else len(workhorse_candidates)
+        pool_msg = (
+            f"Workhorse pool: total={len(workhorse_candidates)} | "
+            f"strict-eligible={len(strict_workhorse_candidates)} | active={active_pool_size}"
+        )
+        if strat == "Maxxed" and strict_workhorse_maxxed and len(strict_workhorse_candidates) == 0:
+            st.warning(f"{pool_msg} — Strict mode has no eligible Workhorse candidates.")
+        else:
+            st.info(pool_msg)
 
         # Precompute set-type distribution (depends on display order)
         type_counts = {"Triad clean": 0, "Hybrid clean": 0, "Triad +1R": 0, "Hybrid +1R": 0, "Multi-Redundant": 0}

@@ -59,6 +59,7 @@ This project is distributed as **code only**.
   - `1 Power`
   - `1 Workhorse`
 - Modes: `Balanced` and `Maxxed`
+- Optional toggle: `Strict Workhorse (Maxxed only)`
 - Score modes: `Class-normalized` (default) and `Absolute`
 - Phase pipeline (`P1`, `P2H0`, `P1R1`, `P2H1`, `P3`)
 - Badge-based hybrid/redundancy classification
@@ -68,6 +69,8 @@ This project is distributed as **code only**.
 - `Absolute`: raw formula score (`hit * rpm / rec + mag * 0.5`).
 - `Class-normalized` (default): normalizes score percentiles inside weapon-type buckets (e.g. Shotgun, SMG, DMR, Bolt-Action Sniper) to improve cross-type comparability in planning.
 - `Maxxed` strategy always uses absolute raw scores for set ranking, so highest-output weapons are prioritized directly.
+- With `Strict Workhorse (Maxxed only)` enabled, hybrid Workhorse candidates are excluded from Maxxed Workhorse selection.
+- Planner labels explicitly show the active ranking basis (Balanced vs Maxxed, and strict toggle state).
 
 ### Icon Handling
 - RGBA compositing on black background
@@ -76,7 +79,7 @@ This project is distributed as **code only**.
 
 ### Lean UX Helpers
 - Startup health check in sidebar (`paths_config.json`, `weapons_stats.csv`, `icons/*.png`)
-- Remembered UI defaults (assignment mode, set sorting, set search, search render limit)
+- Remembered UI defaults (assignment mode, strict Workhorse toggle, set sorting, set search, search render limit)
 
 ---
 
@@ -209,7 +212,7 @@ No code edits are required for normal path setup.
 3. Use **Weapon Search** to build locker
 4. Optionally import from savegame
 5. Open **Strategy Planner**
-6. Choose `Balanced` or `Maxxed`
+6. Choose `Balanced` or `Maxxed` (optional: enable `Strict Workhorse` for Maxxed)
 7. Sort/filter sets and roll random loadouts
 
 ---
