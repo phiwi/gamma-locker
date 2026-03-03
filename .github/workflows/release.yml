@@ -22,6 +22,17 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install dependencies and pytest
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev]
+          # Also install the main dependencies manually if pip [dev] doesn't fetch them
+          pip install streamlit pandas numpy pillow altair tqdm
+
+      - name: Run tests
+        run: |
+          python -m pytest -v tests/test_drafting.py
+
       - name: Build code-only ZIP
         run: |
           bash release.sh
