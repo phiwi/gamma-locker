@@ -54,14 +54,27 @@ def translate(s_id):
     if not s_id: return None
     return translations.get(str(s_id).lower())
 
-# Aggressive list of scope/attachment suffixes to ignore
-JUNK_SUFFIXES = [
-    '_acog', '_eot', '_e0t2', '_ac10632', '_specter', '_leupold', '_aimpoint', 
-    '_point_aimpro', '_ekp8_18', '_pn23', '_gauss_sight', '_marchf', '_kemper', 
-    '_mepro', '_rakurs', '_0kp2', '_rmr', '_deltapoint', '_compm4s', '_pka', 
-    '_1p29', '_kobra', '_ps01', '_1pn93', '_triji', '_spec_alt', '_mark8_rmr',
-    '_romeo4', '_hco', '_t12', '_monstrum', '_trihawk', '_vulcan', '_echo1', '_gauss'
+# Aggressive list of scope/attachment/variant sections to ignore
+# If a section contains any of these patterns, it is considered a derivative variant or attachment
+# and is filtered out to keep only the pure base weapons.
+JUNK_PATTERNS = [
+    r'_acog', r'_eot', r'_e0t2', r'_ac10632', r'_specter', r'_leupold', r'_aimpoint', 
+    r'_point_aimpro', r'_ekp8', r'_pn23', r'_gauss', r'_marchf', r'_kemper', 
+    r'_mepro', r'_rakurs', r'_0kp2', r'_rmr', r'_deltapoint', r'_compm4s', r'_pka', 
+    r'_1p29', r'_kobra', r'_ps01', r'_pso', r'_1pn93', r'_triji', r'_spec', r'_mark8',
+    r'_romeo4', r'_hco', r'_t12', r'_monstrum', r'_trihawk', r'_vulcan', r'_echo1',
+    r'_n_', r'_n$', r'_cw', r'_up', r'_sk1', r'_sk2', r'_camo', r'_custom', r'_new', 
+    r'_rusty', r'_worn', r'_old', r'_1p', r'_ap_', r'_dot', r'_sil', r'_tgp', r'_pbs',
+    r'_kzis', r'_usp1', r'_okp', r'_1g', r'_bas', r'_1p63', r'_1p59', r'_pso1m21', r'_ekp8_02', r'_pso2', r'_1p78gs', r'_1pn93n2_1gs', r'_1p76',
+    r'_c1$', r'_c2$', r'_c3$', r'_c4$', r'_k1$', r'_k2$', r'_k3$'
 ]
+
+def is_junk_section(sec):
+    sec_l = sec.lower()
+    for pat in JUNK_PATTERNS:
+        if re.search(pat, sec_l):
+            return True
+    return False
 
 def clean_num(s):
     res = re.findall(r"[-+]?\d*\.\d+|\d+", str(s))
@@ -141,8 +154,8 @@ for scan_path in SCAN_PATHS:
                                 if remainder.startswith(':'):
                                     parent = remainder[1:].strip().split(',')[0].strip()  # first parent base only
                                 
-                                # FILTER: skip if section ends with known scope/attachment suffix
-                                if any(sec.lower().endswith(s) for s in JUNK_SUFFIXES):
+                                # FILTER: skip if section ends with known scope/attachment/variant suffix
+                                if is_junk_section(sec):
                                     curr = None; continue
                                 
                                 if sec not in registry: 
@@ -171,8 +184,16 @@ final = []
 for sec, d in tqdm.tqdm(registry.items()):
     if not sec.startswith("wpn_") or "_hud" in sec: continue
     
-    # DLTX: ignore scope/attachment sections; NIMBLE remains a valid weapon id
-    if any(sec.lower().endswith(s) for s in JUNK_SUFFIXES): continue
+    # DLTX: ignore scope/attachment/variant sections
+    if is_junk_section(sec): continue
+    
+    # NEW: Skip derivative variants (names with suffixes like _n, _cw, or containing scope IDs)
+    # Exceptions for specialized variants that are unique/top-tier
+    special_variants = ['_kit', '_mono', '_custom', '_isg', '_nimble', '_alfa', '_tactical']
+    
+    # Identify derivative variants by looking for weapon IDs that contain a base weapon ID 
+    # plus an additional suffix (e.g., wpn_abakan_n vs wpn_abakan)
+    # We apply this logic to the FINAL DataFrame instead to catch cross-file variants
     
     hit = clean_num(get_v(sec, 'hit_power', registry))
     rpm = clean_num(get_v(sec, 'rpm', registry))
@@ -196,7 +217,10 @@ for sec, d in tqdm.tqdm(registry.items()):
             'id': sec, 'real_name': real_name, 'hit': hit, 'rpm': rpm, 'slot': slot,
             'acc': clean_num(get_v(sec, 'fire_dispersion_base', registry)) or 0.5,
             'rec': clean_num(get_v(sec, 'cam_dispersion', registry)) or 1.0,
-            'mag': clean_num(get_v(sec, 'ammo_mag_size', registry)) or 30,
+            'rec_inc': clean_num(get_v(sec, 'cam_dispersion_inc', registry)) or 0.1,
+            'rec_hor': clean_num(get_v(sec, 'cam_step_angle_horz', registry)) or 0.5,
+            'mag': int(clean_num(get_v(sec, 'ammo_mag_size', registry)) or 30),
+            'handling': clean_num(get_v(sec, 'control_inertion_factor', registry)) or 1.0,
             'ammo': ammo,
             'mod': d['mod'], 
             'class': get_weapon_class(sec, ammo, slot, d, registry),
@@ -204,6 +228,38 @@ for sec, d in tqdm.tqdm(registry.items()):
         })
 
 df_final = pd.DataFrame(final).drop_duplicates('id')
+
+# --- Deduplicate variants (e.g., wpn_abakan vs wpn_abakan_n) ---
+# We keep only one variant per 'real_name' + primary stats combination
+# to prevent the locker from filling up with functional duplicates.
+df_final['stat_hash'] = df_final.apply(
+    lambda r: f"{r['real_name']}_{r['hit']}_{r['rpm']}_{r['rec']}_{r['mag']}", axis=1
+)
+df_final = df_final.drop_duplicates('stat_hash').drop(columns=['stat_hash'])
+
+# --- Derivative Stripping (wpn_xxx_yyy -> wpn_xxx) ---
+# Group weapons by their base model name and only keep the "original" one
+# to eliminate scope-derived and NV-derived duplicates.
+def get_base_id_and_originality(wid):
+    wid_l = wid.lower()
+    # Specialized variants to preserve even if base ID exists
+    special = ['_kit', '_mono', '_custom', '_isg', '_nimble', '_alfa', '_tactical']
+    if any(s in wid_l for s in special):
+        return wid, 0 # Give highest priority (0) to special variants
+    
+    parts = wid_l.split('_')
+    # If it's wpn_xxx_yyy, 'wpn_xxx' is likely the base model name
+    if len(parts) > 2:
+        return "_".join(parts[:2]), 1 # Priority 1 for suspected variants
+    return wid_l, 0 # Priority 0 for likely base weapons
+
+df_final['base_id_group'], df_final['prio'] = zip(*df_final['id'].map(get_base_id_and_originality))
+
+# Within each base group and real_name, keep the one with the highest priority (lowest prio number)
+# and shortest ID (the true root weapon)
+df_final = df_final.sort_values(by=['prio', 'id'], key=lambda x: x if x.name != 'id' else x.str.len())
+df_final = df_final.drop_duplicates(subset=['base_id_group', 'real_name'], keep='first').drop(columns=['base_id_group', 'prio'])
+
 df_final.to_csv(OUT_DIR / "weapons_stats.csv", index=False)
 # Redundant print removed
 # --- ICON EXTRACTION ---

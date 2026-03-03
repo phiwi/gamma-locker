@@ -1100,12 +1100,32 @@ with t2:
                                 hit_raw = float(w.get('hit', 0) or 0)
                                 rpm_raw = int(float(w.get('rpm', 0) or 0))
                                 rec_raw = float(w.get('rec', 0) or 0)
+                                rec_inc = float(w.get('rec_inc', 0.1) or 0.1)
+                                rec_hor = float(w.get('rec_hor', 0.5) or 0.5)
                                 mag_raw = int(float(w.get('mag', 0) or 0))
+                                handling_factor = float(w.get('handling', 1.0) or 1.0)
+                                acc_disp = float(w.get('acc', 0.5) or 0.5)
+
+                                # UI Mapping Calculations (Anomaly Style)
+                                ui_damage = int(hit_raw * 100)
+                                ui_accuracy = max(1, min(100, int(100 - (acc_disp * 100))))
+                                ui_handling = max(1, min(100, int(100 - (handling_factor * 20))))
+                                # Recoil is a complex mix in the UI; using a weighted mapping approximation
+                                ui_recoil = max(1, min(100, int(100 - ((rec_raw + rec_inc * 1.5 + rec_hor * 0.5) * 12))))
+
                                 cal_weight = get_caliber_weight(w.get('ammo', ''))
                                 recoil_rating = float(w.get('recoil_rating', 0) or 0)
-                                recoil_control_ltx = max(1.0, min(100.0, 101.0 - (rec_raw * 100.0)))
+                                
+                                st.caption(f"**Estimated In-game UI Bars:**")
+                                cols_ui = st.columns(4)
+                                cols_ui[0].metric("DMG", f"{ui_damage}%")
+                                cols_ui[1].metric("ACC", f"{ui_accuracy}%")
+                                cols_ui[2].metric("HND", f"{ui_handling}%")
+                                cols_ui[3].metric("REC", f"{ui_recoil}%")
+
+                                st.divider()
                                 st.caption(
-                                    f"Scoring inputs (LTX): DMG: {int(hit_raw * 100)} | RPM: {rpm_raw} | Mag: {mag_raw} | rec: {rec_raw:.3f} (~RC {recoil_control_ltx:.1f}) | Caliber weight: {cal_weight:.2f}"
+                                    f"Scoring inputs (LTX): DMG: {ui_damage} | RPM: {rpm_raw} | Mag: {mag_raw} | rec: {rec_raw:.3f} | Caliber weight: {cal_weight:.2f}"
                                 )
                                 st.caption(
                                     f"Raw: {float(w.get('raw_score', 0)):.3f} | Cal-Adj: {float(w.get('raw_adjusted', 0)):.3f} | Unified score: {float(w.get('final_score', 0)):.3f}"
