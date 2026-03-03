@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import os, json
+import re
+import random
 from itertools import product
 from PIL import Image
 import altair as alt
@@ -13,46 +14,49 @@ DATA_DIR = "loadout_lab_data"
 LOCKER_FILE = os.path.join(DATA_DIR, "my_locker.json")
 BACKUP_FILE = os.path.join(DATA_DIR, "my_locker_backup.json")
 UI_PREFS_FILE = os.path.join(DATA_DIR, "ui_prefs.json")
+INGAME_STATS_FILE = "ingame_stats_overrides.json"
 SAVE_DIR = "/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/appdata/savedgames/"
 SAVE_DIR = str(get_path("save_dir", SAVE_DIR))
 
 # --- CONFIG & RULES ---
 GROUP_LIGHT = ['5.45x39', '5.56x45', '7.62x39', '9x39']
 GROUP_HEAVY = ['7.62x51', '7.62x54', '12.7x55', '.300', '.338', '23x75', '12x76']
-POWER_AMMO = GROUP_HEAVY + ['9x39', '23x75', '12x76']
+POWER_AMMO = GROUP_HEAVY + ['23x75', '12x76']
 FORBIDDEN_CLASSES = ["assault", "sniper", "dmr", "battle", "lmg", "shotgun", "rifle", "smg"]
-SIDEARM_OVERRIDES = {
-    "wpn_sr2_veresk",
-    "wpn_sr2_veresk_sr2_upkit",
-    "wpn_sr2_m1",
-    "wpn_sr2_m2",
-    "wpn_sr2_m1_p1x42",
-    "wpn_sr2_m1_pk6",
-    "wpn_sr2_m1_1p87",
-    "wpn_sr2_m1_kp_sr2",
-    "wpn_sr2_m1_aim_low",
-    "wpn_sr2_m1_d0cter",
-    "wpn_sr2_veresk_kp_sr2",
-}
-
 SIDEARM_SMG_PREFIXES = (
+    "wpn_mp5k",
+    "wpn_eft_mp5k",
+    "wpn_sr2_",
+    "wpn_sr2_veresk",
     "wpn_p90",
     "wpn_ps90",
     "wpn_eft_p90",
-    "wpn_sr2_veresk",
-    "wpn_sr2_m1",
-    "wpn_sr2_m2",
-    "wpn_mp5k",
-    "wpn_eft_mp5k",
 )
-
 ICON_NO_CW_FALLBACK_PREFIXES = (
     "wpn_spas12",
 )
 
-def is_allowed_sidearm_smg(r):
-    wpn_id = str(r.get('id', '')).lower()
-    return any(wpn_id.startswith(prefix) for prefix in SIDEARM_SMG_PREFIXES)
+CALIBER_WEIGHT_PATTERNS = [
+    ("9x18", 0.72),
+    ("9x19", 0.72),
+    ("9x21", 0.82),
+    ("11.43x23", 0.88),
+    (".45", 0.88),
+    ("45acp", 0.88),
+    ("5.45x39", 1.00),
+    ("5.56x45", 1.08),
+    ("6.8x51", 1.20),
+    ("7.62x39", 1.10),
+    ("7.62x51", 1.25),
+    ("7.62x54", 1.30),
+    ("9x39", 1.15),
+    ("12x70", 1.18),
+    ("12x76", 1.22),
+    ("23x75", 1.30),
+    ("12.7x55", 1.35),
+    (".300", 1.28),
+    (".338", 1.40),
+]
 
 def load_locker():
     if os.path.exists(LOCKER_FILE):
@@ -97,8 +101,7 @@ def save_ui_prefs():
         "sort_mode_sets": st.session_state.get("sort_mode_sets", "By score"),
         "set_search_query": st.session_state.get("set_search_query", ""),
         "search_result_limit": st.session_state.get("search_result_limit", 30),
-        "score_mode": st.session_state.get("score_mode", "Class-normalized"),
-        "strict_workhorse_maxxed": st.session_state.get("strict_workhorse_maxxed", False),
+        "show_raw_stats_cards": st.session_state.get("show_raw_stats_cards", False),
     }
     with open(UI_PREFS_FILE, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
@@ -110,8 +113,7 @@ def init_ui_prefs():
         "sort_mode_sets": "By score",
         "set_search_query": "",
         "search_result_limit": 30,
-        "score_mode": "Class-normalized",
-        "strict_workhorse_maxxed": False,
+        "show_raw_stats_cards": False,
     }
     for key, default_value in defaults.items():
         if key not in st.session_state:
@@ -145,12 +147,8 @@ def render_startup_health():
         if not icons_ok:
             st.caption("Fix: run python3 scraper.py to extract icon PNGs.")
 
-def apply_score_mode_to_df():
-    score_mode = st.session_state.get("score_mode", "Class-normalized")
-    if score_mode == "Absolute":
-        df['score'] = df['raw_score']
-    else:
-        df['score'] = df['class_norm_score']
+def apply_unified_score_to_df():
+    df['score'] = df['final_score']
 
 def prettify_ammo(ammo_raw):
     if pd.isna(ammo_raw):
@@ -158,12 +156,109 @@ def prettify_ammo(ammo_raw):
     text = str(ammo_raw)
     return text.split('_')[0]
 
+def parse_number(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).replace(",", ".")
+    match = re.search(r"-?\d+(?:\.\d+)?", text)
+    if not match:
+        return None
+    try:
+        return float(match.group(0))
+    except Exception:
+        return None
+
+def load_ingame_stats_overrides():
+    if not os.path.exists(INGAME_STATS_FILE):
+        return {}
+    try:
+        with open(INGAME_STATS_FILE, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+            return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+def apply_ingame_stats_overrides(df_local):
+    overrides = load_ingame_stats_overrides()
+    df_local = df_local.copy()
+    df_local['rec_ltx'] = df_local['rec']
+    df_local['stats_source'] = 'ltx'
+    df_local['ingame_accuracy'] = pd.NA
+    df_local['ingame_handling'] = pd.NA
+    df_local['ingame_damage'] = pd.NA
+    df_local['ingame_fire_rate'] = pd.NA
+    df_local['ingame_mag_size'] = pd.NA
+    df_local['ingame_max_range'] = pd.NA
+    df_local['ingame_muzzle_velocity'] = pd.NA
+    df_local['ingame_reliability'] = pd.NA
+    df_local['ingame_recoil_control'] = pd.NA
+
+    for weapon_id, data in overrides.items():
+        if not isinstance(data, dict):
+            continue
+        if str(weapon_id).startswith("name:"):
+            name_query = str(weapon_id)[5:].strip().lower()
+            mask = df_local['real_name'].astype(str).str.lower() == name_query
+        else:
+            mask = df_local['id'] == weapon_id
+        if not mask.any():
+            continue
+
+        accuracy = parse_number(data.get('accuracy'))
+        handling = parse_number(data.get('handling'))
+        damage = parse_number(data.get('damage'))
+        fire_rate = parse_number(data.get('fire_rate'))
+        mag_size = parse_number(data.get('mag_size'))
+        max_range = parse_number(data.get('max_range'))
+        muzzle_velocity = parse_number(data.get('muzzle_velocity'))
+        reliability = parse_number(data.get('reliability'))
+        recoil_control = parse_number(data.get('recoil_control'))
+
+        df_local.loc[mask, 'stats_source'] = 'ingame'
+        if accuracy is not None:
+            df_local.loc[mask, 'ingame_accuracy'] = accuracy
+        if handling is not None:
+            df_local.loc[mask, 'ingame_handling'] = handling
+        if damage is not None:
+            df_local.loc[mask, 'ingame_damage'] = damage
+        if fire_rate is not None:
+            df_local.loc[mask, 'ingame_fire_rate'] = fire_rate
+        if mag_size is not None:
+            df_local.loc[mask, 'ingame_mag_size'] = mag_size
+        if max_range is not None:
+            df_local.loc[mask, 'ingame_max_range'] = max_range
+        if muzzle_velocity is not None:
+            df_local.loc[mask, 'ingame_muzzle_velocity'] = muzzle_velocity
+        if reliability is not None:
+            df_local.loc[mask, 'ingame_reliability'] = reliability
+        if recoil_control is not None:
+            df_local.loc[mask, 'ingame_recoil_control'] = recoil_control
+
+    return df_local
+
 def compute_score(row):
     hit = float(row.get('hit', 0))
     rpm = float(row.get('rpm', 0))
     rec = max(float(row.get('rec', 0)), 0.01)
     mag = float(row.get('mag', 0))
     return (hit * rpm) / rec + (mag * 0.5)
+
+def get_caliber_weight(ammo_raw):
+    ammo = str(ammo_raw or "").lower()
+    for pattern, weight in CALIBER_WEIGHT_PATTERNS:
+        if pattern in ammo:
+            return weight
+    return 1.0
+
+def compute_adjusted_score(row):
+    hit = float(row.get('hit', 0))
+    rpm = float(row.get('rpm', 0))
+    rec = max(float(row.get('rec', 0)), 0.01)
+    mag = float(row.get('mag', 0))
+    adjusted_hit = hit * get_caliber_weight(row.get('ammo', ''))
+    return (adjusted_hit * rpm) / rec + (mag * 0.5)
 
 def get_score_bucket(row):
     cls_raw = str(row.get('class', '')).lower()
@@ -192,7 +287,7 @@ def get_score_bucket(row):
 def compute_class_normalized_scores(df_local):
     ranked = (
         df_local
-        .groupby('score_bucket')['raw_score']
+        .groupby('score_bucket')['raw_adjusted']
         .rank(method='average', pct=True)
         .fillna(0)
     )
@@ -261,22 +356,12 @@ def get_role(r):
     cls_raw = str(r.get('class', '')).lower()
     slot = int(r.get('slot', 0))
     ammo = str(r.get('ammo', '')).lower()
-    wpn_id = str(r.get('id', ''))
-    if wpn_id in SIDEARM_OVERRIDES:
+    wpn_id = str(r.get('id', '')).lower()
+    if any(wpn_id.startswith(prefix) for prefix in SIDEARM_SMG_PREFIXES):
         return "Sidearm"
-    if slot == 1 and (cls_raw == "pistol" or ("smg" in cls_raw and is_allowed_sidearm_smg(r))):
+    if slot == 1 and cls_raw == "pistol":
         return "Sidearm"
-    if "shotgun" in cls_raw:
-        if any(x in cls_raw for x in ["sniper", "dmr", "battle", "lmg"]):
-            return "Power"
-        if "6.8x51" in ammo:
-            return "Power"
-        return "Workhorse"
-    if any(x in cls_raw for x in ["sniper", "dmr", "battle", "lmg"]):
-        return "Power"
-    if "6.8x51" in ammo:
-        return "Power"
-    if any(a in ammo for a in POWER_AMMO):
+    if "6.8x51" in ammo or any(a in ammo for a in POWER_AMMO):
         return "Power"
     return "Workhorse"
 
@@ -291,14 +376,18 @@ def load_data():
     name_mask = df['real_name'].fillna('').str.lower().str.contains('knife|melee|axe|tomahawk', na=False)
     id_mask = df['id'].fillna('').str.lower().str.contains('knife|melee|axe|tomahawk', na=False)
     df = df[~(melee_mask | name_mask | id_mask)].reset_index(drop=True)
+    df = apply_ingame_stats_overrides(df)
     df['pretty_name'] = df.get('real_name', df['id'])
     df['ammo_display'] = df['ammo'].apply(prettify_ammo)
     if 'mutant_killer' not in df.columns:
         df['mutant_killer'] = False
     df['raw_score'] = df.apply(compute_score, axis=1)
+    df['raw_adjusted'] = df.apply(compute_adjusted_score, axis=1)
+    df['recoil_rating'] = (1.0 - df['rec'].rank(method='average', pct=True).fillna(0.5)) * 100.0
     df['score_bucket'] = df.apply(get_score_bucket, axis=1)
     df['class_norm_score'] = compute_class_normalized_scores(df)
-    df['score'] = df['class_norm_score']
+    df['final_score'] = df['raw_adjusted']
+    df['score'] = df['final_score']
     df['role_label'] = df.apply(get_role, axis=1)
     return df
 
@@ -308,7 +397,7 @@ if 'locker' not in st.session_state:
     st.session_state.locker = load_locker()
 
 init_ui_prefs()
-apply_score_mode_to_df()
+apply_unified_score_to_df()
 
 def is_ammo_conflict(w1, w2):
     if not w1 or not w2:
@@ -319,11 +408,6 @@ def is_ammo_conflict(w1, w2):
 
     in_light1 = any(g in a1 for g in GROUP_LIGHT)
     in_light2 = any(g in a2 for g in GROUP_LIGHT)
-    c1, c2 = str(w1.get('class', '')).lower(), str(w2.get('class', '')).lower()
-    is_hybrid = any(x in c1 for x in ["shotgun", "smg"]) or any(x in c2 for x in ["shotgun", "smg"])
-
-    if (in_light1 or in_light2) and is_hybrid:
-        return False
     if in_light1 and in_light2:
         return True
     in_heavy1 = any(g in a1 for g in GROUP_HEAVY)
@@ -338,181 +422,215 @@ def is_valid_pair(w1, w2):
 def is_valid_set(s, p, wh):
     return is_valid_pair(s, p) and is_valid_pair(s, wh) and is_valid_pair(p, wh)
 
-def calculate_all_sets(inventory_ids, strategy, score_mode, strict_workhorse_maxxed=False):
+def calculate_all_sets(inventory_ids, strategy):
     all_w_df = df[df['id'].isin(inventory_ids)].copy()
     all_w_df['role_label'] = all_w_df.apply(get_role, axis=1)
 
-    if strategy == "Maxxed":
-        score_field = 'raw_score'
-    else:
-        score_field = 'raw_score' if score_mode == "Absolute" else 'class_norm_score'
+    score_field = 'final_score'
 
     def score_of(w):
         return float(w.get(score_field, w.get('score', 0)))
 
-    def is_close_hybrid_row(r):
-        if get_role(r) == "Sidearm":
-            return False
-        cls = str(r.get('class', '')).lower()
-        slot = int(r.get('slot', 0))
-        ammo = str(r.get('ammo', '')).lower()
-        pistol_cals = ['9x19', '9x21', '9x18', '11.43x23', '.45', '45acp']
-        is_pistol_cal = any(cal in ammo for cal in pistol_cals)
-        return ('shotgun' in cls) or ('smg' in cls and slot != 1) or (is_pistol_cal and slot != 1)
-
-    def is_true_sidearm_row(r):
-        cls = str(r.get('class', '')).strip().lower()
-        slot = int(r.get('slot', 0))
-        wpn_id = str(r.get('id', ''))
-        if wpn_id in SIDEARM_OVERRIDES:
-            return True
-        return slot == 1 and ("pistol" in cls or ("smg" in cls and is_allowed_sidearm_smg(r)))
-
-    all_sidearms_df = all_w_df[all_w_df.apply(is_true_sidearm_row, axis=1)]
+    all_sidearms_df = all_w_df[all_w_df['role_label'] == 'Sidearm']
 
     all_w = all_w_df.to_dict('records')
     sidearms = all_sidearms_df.to_dict('records')
     powers = [w for w in all_w if w['role_label'] == 'Power']
-    workhorses = [w for w in all_w if w['role_label'] == 'Workhorse']
-    strict_mode_active = strategy == "Maxxed" and strict_workhorse_maxxed
-    workhorse_pool = [w for w in workhorses if not is_close_hybrid_row(w)] if strict_mode_active else workhorses
-    hybrids_close = [] if strict_mode_active else [w for w in workhorses if is_close_hybrid_row(w)]
+    # Workhorse darf nur Light, MP oder Shotgun sein (Heavy-Kaliber ausgeschlossen)
+    def is_valid_workhorse(w):
+        ammo = str(w.get('ammo', '')).lower()
+        cls = str(w.get('class', '')).lower()
+        # Light-Kaliber
+        if any(cal in ammo for cal in GROUP_LIGHT):
+            return True
+        # MP/Shotgun
+        if ('smg' in cls) or ('shotgun' in cls):
+            return True
+        return False
+    workhorses = [w for w in all_w if w['role_label'] == 'Workhorse' and is_valid_workhorse(w)]
+
+    def is_light_weapon(w):
+        ammo = str(w.get('ammo', '')).lower()
+        return any(cal in ammo for cal in GROUP_LIGHT)
+
+    def is_mp_or_shotgun_workhorse(w):
+        cls = str(w.get('class', '')).lower()
+        return ('smg' in cls) or ('shotgun' in cls)
+
+    flex_light_powers = [w for w in workhorses if is_light_weapon(w)]
+    hybrid_workhorses = [w for w in workhorses if is_mp_or_shotgun_workhorse(w)]
+    base_power_ids = {w['id'] for w in powers}
+    flex_light_ids = {w['id'] for w in flex_light_powers}
 
     if not all_w:
         return []
-    if not sidearms or not powers or not workhorse_pool:
+    if not sidearms or not powers or not workhorses:
         return []
 
     avg_s = all_sidearms_df[score_field].mean() if not all_sidearms_df.empty else 0
     avg_p = all_w_df[all_w_df['role_label'] == 'Power'][score_field].mean() if not all_w_df[all_w_df['role_label'] == 'Power'].empty else 0
-    workhorse_pool_df = pd.DataFrame(workhorse_pool)
-    avg_wh = workhorse_pool_df[score_field].mean() if not workhorse_pool_df.empty else 0
+    avg_wh = all_w_df[all_w_df['role_label'] == 'Workhorse'][score_field].mean() if not all_w_df[all_w_df['role_label'] == 'Workhorse'].empty else 0
     target_average_score = avg_s + avg_p + avg_wh
-
-    def get_fitness(w_set, target_avg):
-        total_score = sum(score_of(w) for w in w_set if w)
-        if strategy == "Maxxed":
-            return total_score
-        return -abs(target_avg - total_score)
 
     usage = {w_id: 0 for w_id in inventory_ids}
     final_sets = []
 
+    def get_tier_info(triple):
+        # 1) GREEN: Pure maxxing (Heavy + Light) until sidearm runs out.
+        # 2) BLUE: Redundant sidearm + pure maxxing (Heavy + Light)
+        # 3) LIGHT BLUE: Redundant sidearm + Hybrid mode: Heavy + MP/Shotgun
+        # 4) ORANGE: Redundant sidearm + Hybrid mode: Light + MP/Shotgun
+        # 5) RED: Now continue fill up sets with more redundancies until all weapons are drafted.
+        
+        p, wh, s = triple
+        red_p = usage[p['id']] > 0
+        red_wh = usage[wh['id']] > 0
+        red_s = usage[s['id']] > 0
+        
+        is_hybrid = not is_light_weapon(wh) and is_mp_or_shotgun_workhorse(wh)
+        is_pure = is_light_weapon(wh)
+        
+        # Tier 1: Green (Pure, No Redundancies)
+        if not red_p and not red_wh and not red_s and is_pure:
+            return 1, "🟩", "Green: Pure Maxxing"
+        
+        # Tier 2: Blue (Redundant sidearm + pure maxxing)
+        if not red_p and not red_wh and red_s and is_pure:
+            return 2, "🟦", "Blue: Redundant Sidearm + Pure"
+            
+        # Tier 3: Light Blue (Redundant sidearm + Hybrid mode: Heavy + MP/Shotgun)
+        if not red_p and not red_wh and red_s and is_hybrid and not is_light_weapon(p):
+            return 3, "🔲", "Light Blue: Redundant Sidearm + Hybrid (Heavy)"
+            
+        # Tier 4: Orange (Redundant sidearm + Hybrid mode: Light + MP/Shotgun)
+        # Note: In hybrid light mode, p is light and wh is smg/shotgun
+        if not red_p and not red_wh and red_s and is_hybrid and is_light_weapon(p):
+            return 4, "🟧", "Orange: Redundant Sidearm + Hybrid (Light)"
+            
+        # Tier 5: Red (Anything else / more redundancies)
+        # Improvement: Sub-tiering within Red based on redundancy count and "Hybrid-ness"
+        red_count = (1 if red_p else 0) + (1 if red_wh else 0) + (1 if red_s else 0)
+        # We want to penalize hybrid builds within Tier 5 so Normal builds are picked first
+        hybrid_penalty = 10 if is_hybrid else 0
+        tier_val = 50 + (red_count * 10) + hybrid_penalty
+        
+        return tier_val, "🟥", "Red: Multiple Redundancies"
+
     def add_set(triple, phase):
         order_idx = len(final_sets)
-        for w in triple:
-            if w:
-                usage[w['id']] += 1
+        active_triple = [w for w in triple if w]
+        full_scores = [score_of(w) for w in active_triple]
+        
+        tier_val, badge, tier_name = get_tier_info(triple)
+
         weapon_payload = []
         for w in triple:
             w_copy = dict(w)
             w_copy['score'] = score_of(w)
             weapon_payload.append(w_copy)
-        final_sets.append({"weapons": weapon_payload, "phase": phase, "order": order_idx})
+            
+        for w in triple:
+            if w:
+                usage[w['id']] += 1
+                
+        final_sets.append({
+            "weapons": weapon_payload,
+            "phase": phase,
+            "order": order_idx,
+            "badge": badge,
+            "tier_val": tier_val,
+            "tier_name": tier_name,
+            "fitness": triple_fitness(triple),
+            "avg_score": (sum(full_scores) / len(full_scores)) if full_scores else 0.0,
+        })
 
-    def redundant_count(triple):
-        return sum(1 for w in triple if w and usage[w['id']] > 0)
+    def triple_total(triple):
+        return sum(score_of(w) for w in triple)
 
-    def usage_penalty(triple):
-        return sum(usage[w['id']] for w in triple if w)
+    def triple_fitness(triple):
+        total = triple_total(triple)
+        if strategy == "Maxxed":
+            return total
+        return -abs(target_average_score - total)
 
-    # Phase 1: no redundancy
+    def choose_best(candidates):
+            if not candidates:
+                return None
+            
+            # Group by tiers first
+            tier_groups = {}
+            for t in candidates:
+                tv, _, _ = get_tier_info(t)
+                tier_groups.setdefault(tv, []).append(t)
+            
+            for tv in sorted(tier_groups.keys()):
+                group = tier_groups[tv]
+                
+                # Tier 1: Pure Maxxing (Unique + Non-redundant)
+                # In Tier 1, we still want to apply the strategy (Maxxed or Balanced)
+                if tv == 1:
+                    best_f = max(triple_fitness(t) for t in group)
+                    top = [t for t in group if triple_fitness(t) == best_f]
+                    return random.choice(top)
+                
+                # Tiers 2-5: Redundant tiers
+                # Request (C): ALWAYS sample uniformly from the redundant set.
+                # SPECIAL CASE: In "Balanced" mode, we still want to avoid extreme score outliers 
+                # even in redundant sets to keep the 'Feel' balanced.
+                if strategy == "Balanced":
+                    # Filter for sets that are reasonably close to the target average (within 25%)
+                    # to keep the "Balanced" promise while still allowing variety.
+                    f_scores = [triple_fitness(t) for t in group]
+                    max_f = max(f_scores)
+                    min_f = min(f_scores)
+                    threshold = max_f - (max_f - min_f) * 0.4 # Keep top 40% of 'balanced' candidates
+                    balanced_group = [t for t in group if triple_fitness(t) >= threshold]
+                    return random.choice(balanced_group)
+                
+                # In Maxxed mode: True uniform random sampling for variety as requested.
+                return random.choice(group)
+            return None
+
+    # Draft loop: Continue as long as we can find ANY valid set 
+    # that uses at least one new weapon (to ensure progress).
+    # The tiers will naturally guide the order via choose_best.
     while True:
-        avail_p = [w for w in powers if usage[w['id']] == 0]
-        avail_wh = [w for w in workhorses if usage[w['id']] == 0 and not is_close_hybrid_row(w)]
-        avail_s = [w for w in sidearms if usage[w['id']] == 0]
-        if not (avail_p and avail_wh and avail_s):
+        unused_ids = [w_id for w_id, count in usage.items() if count == 0]
+        if not unused_ids:
             break
-        best = None
-        best_f = -1e18
-        for p, wh, s in product(avail_p, avail_wh, avail_s):
-            if any(is_close_hybrid_row(w) for w in (p, wh, s)):
-                continue
-            if not is_valid_set(s, p, wh):
-                continue
-            f = get_fitness([p, wh, s], target_average_score)
-            if f > best_f:
-                best_f = f
-                best = (p, wh, s)
-        if not best:
-            break
-        add_set(best, "P1")
+            
+        candidate_triples = []
+        
+        # 1. Normal sets (Heavy + Light)
+        for p, wh, s in product(powers, workhorses, sidearms):
+            if not is_valid_set(s, p, wh): continue
+            if not is_light_weapon(wh): continue # Strict pure mode check
+            
+            # To ensure we finish drafting, we must use at least one unused weapon
+            if any(w['id'] in unused_ids for w in (p, wh, s)):
+                candidate_triples.append((p, wh, s))
+                
+        # 2. Hybrid sets (Heavy/Light + MP/Shotgun)
+        # Note: powers contains heavy, flex_light_powers contains light
+        all_potential_p = list({w['id']: w for w in powers + flex_light_powers}.values())
+        for p, wh, s in product(all_potential_p, hybrid_workhorses, sidearms):
+            if not is_valid_set(s, p, wh): continue
+            if any(w['id'] in unused_ids for w in (p, wh, s)):
+                candidate_triples.append((p, wh, s))
 
-    # Phase 2H0: hybrid clean (exact triad), no redundancy
-    while True:
-        best = None
-        best_f = -1e18
-        for p, wh, s in product(powers, hybrids_close, sidearms):
-            if usage[p['id']] > 0 or usage[wh['id']] > 0 or usage[s['id']] > 0:
-                continue
-            if not is_valid_set(s, p, wh):
-                continue
-            f = get_fitness([p, wh, s], target_average_score)
-            if f > best_f:
-                best_f = f
-                best = (p, wh, s)
+        best = choose_best(candidate_triples)
         if not best:
+            # If no set uses an unused weapon, we might have weird orphaned weapons.
+            # Mark them as "used" to exit loop.
+            for uid in unused_ids:
+                usage[uid] += 1
             break
-        add_set(best, "P2H0")
+            
+        tv, _, _ = get_tier_info(best)
+        add_set(best, f"T{tv}")
 
-    # Phase 1R1: exactly one redundant, two fresh
-    while True:
-        best = None
-        best_f = -1e18
-        for p, wh, s in product(powers, workhorse_pool, sidearms):
-            rcount = redundant_count((p, wh, s))
-            fresh = sum(1 for w in (p, wh, s) if usage[w['id']] == 0)
-            if rcount != 1 or fresh < 2:
-                continue
-            if not is_valid_set(s, p, wh):
-                continue
-            f = get_fitness([p, wh, s], target_average_score) - (rcount * 0.0001) - (usage_penalty((p, wh, s)) * 0.1)
-            if f > best_f:
-                best_f = f
-                best = (p, wh, s)
-        if not best:
-            break
-        add_set(best, "P1R1")
-
-    # Phase 2H1: hybrid with exactly one redundancy (exact triad)
-    while True:
-        best = None
-        best_f = -1e18
-        for p, wh, s in product(powers, hybrids_close, sidearms):
-            rcount = redundant_count((p, wh, s))
-            fresh = sum(1 for w in (p, wh, s) if usage[w['id']] == 0)
-            if rcount != 1 or fresh < 2:
-                continue
-            if not is_valid_set(s, p, wh):
-                continue
-            f = get_fitness([p, wh, s], target_average_score) - (rcount * 0.0001) - (usage_penalty((p, wh, s)) * 0.1)
-            if f > best_f:
-                best_f = f
-                best = (p, wh, s)
-        if not best:
-            break
-        add_set(best, "P2H1")
-
-    # Phase 3: rest (any redundancy allowed), still exact triads only
-    while True:
-        best = None
-        best_f = -1e18
-        for p, wh, s in product(powers, workhorse_pool, sidearms):
-            triple = (p, wh, s)
-            fresh = any(usage[x['id']] == 0 for x in triple)
-            if not fresh and len(final_sets) > 0:
-                continue
-            if not is_valid_set(s, p, wh):
-                continue
-            f = get_fitness([p, wh, s], target_average_score) - (redundant_count(triple) * 0.001) - (usage_penalty(triple) * 0.1)
-            if f > best_f:
-                best_f = f
-                best = triple
-        if not best:
-            break
-        add_set(best, "P3")
-        if not any(v == 0 for v in usage.values()):
-            break
+    # Final sorting by tier, then fitness
+    final_sets.sort(key=lambda x: (x.get('tier_val', 5), -x['fitness']))
 
     return final_sets
 
@@ -545,13 +663,8 @@ if st.sidebar.button("🎲 Load 50 random weapons"):
 
 st.sidebar.divider()
 st.sidebar.subheader("📈 Scoring")
-st.sidebar.radio(
-    "Score mode",
-    ["Class-normalized", "Absolute"],
-    key="score_mode",
-    help="Class-normalized compares weapons within their weapon type. Absolute uses the raw formula score."
-)
-apply_score_mode_to_df()
+st.sidebar.caption("Unified score active: caliber-adjusted weapon score for all modes.")
+apply_unified_score_to_df()
 save_ui_prefs()
 
 st.sidebar.divider()
@@ -823,7 +936,7 @@ with t2:
     if len(st.session_state.locker) < 3:
         st.warning("Add at least 3 weapons to generate sets.")
     else:
-        st.caption(f"Scoring mode: {st.session_state.get('score_mode', 'Class-normalized')}")
+        st.caption("Scoring: unified caliber-adjusted weapon score (same for Balanced and Maxxed)")
         # Diagnostics: role distribution in current locker
         locker_role_df = df[df['id'].isin(st.session_state.locker)].copy()
         role_counts_diag = locker_role_df['role_label'].value_counts()
@@ -837,75 +950,40 @@ with t2:
         )
 
         strat = st.radio("Assignment mode:", ["Balanced", "Maxxed"], horizontal=True, key="strategy_mode")
-        active_score_mode = st.session_state.get('score_mode', 'Class-normalized')
-        strict_workhorse_maxxed = st.checkbox(
-            "Strict Workhorse (Maxxed only)",
-            key="strict_workhorse_maxxed",
-            help="When enabled, Maxxed only uses non-hybrid Workhorse candidates (excludes Shotgun/SMG slot!=1 and pistol-caliber non-sidearm entries)."
+        show_raw_stats_cards = st.checkbox(
+            "Show raw stats inspector",
+            key="show_raw_stats_cards",
+            help="Shows raw weapon stats and score components directly in each set card."
         )
         if strat == "Maxxed":
-            if strict_workhorse_maxxed:
-                st.caption("Maxxed label: Absolute raw scoring + strict non-hybrid Workhorse pool.")
-            else:
-                st.caption("Maxxed label: Absolute raw scoring; hybrid Workhorses can rank high.")
+            st.caption("Maxxed label: P1 strict unique draft, then P2 (Light→Power only with MP/Shotgun Workhorse), then redundant phase R with uniform sampling.")
         else:
-            st.caption("Balanced label: Uses selected score mode with phase-aware set balancing.")
-        res_sets = calculate_all_sets(
-            st.session_state.locker,
-            strat,
-            active_score_mode,
-            strict_workhorse_maxxed=strict_workhorse_maxxed
-        )
+            st.caption("Balanced label: same P1/P2/R draft model, but set fitness targets balanced totals.")
+        res_sets = calculate_all_sets(st.session_state.locker, strat)
 
         # Helper for set classification (color badges) and distribution
-        def is_close_hybrid_disp(w):
-            if get_role(w) == "Sidearm":
-                return False
-            cls = str(w.get('class', '')).lower()
-            slot = int(w.get('slot', 0))
-            ammo = str(w.get('ammo', '')).lower()
-            pistol_cals = ['9x19', '9x21', '9x18', '11.43x23', '.45', '45acp']
-            is_pistol_cal = any(cal in ammo for cal in pistol_cals)
-            return ('shotgun' in cls) or ('smg' in cls and slot != 1) or (is_pistol_cal and slot != 1)
-
         def classify_set(active_w, redundant_count):
-            if len(active_w) < 3:
-                return "🟥", "Multi-Redundant"
-            has_hybrid = any(is_close_hybrid_disp(w) for w in active_w)
             if redundant_count == 0:
-                return ("🟦", "Hybrid clean") if has_hybrid else ("🟩", "Triad clean")
+                return "🟩", "Clean"
             if redundant_count == 1:
-                return ("🟧", "Hybrid +1R") if has_hybrid else ("🩵", "Triad +1R")
+                return "🟧", "+1 Redundant"
             return "🟥", "Multi-Redundant"
 
-        workhorse_candidates = locker_role_df[locker_role_df['role_label'] == 'Workhorse']
-        strict_workhorse_candidates = workhorse_candidates[~workhorse_candidates.apply(is_close_hybrid_disp, axis=1)]
-        active_pool_size = len(strict_workhorse_candidates) if (strat == "Maxxed" and strict_workhorse_maxxed) else len(workhorse_candidates)
-        pool_msg = (
-            f"Workhorse pool: total={len(workhorse_candidates)} | "
-            f"strict-eligible={len(strict_workhorse_candidates)} | active={active_pool_size}"
-        )
-        if strat == "Maxxed" and strict_workhorse_maxxed and len(strict_workhorse_candidates) == 0:
-            st.warning(f"{pool_msg} — Strict mode has no eligible Workhorse candidates.")
-        else:
-            st.info(pool_msg)
-
         # Precompute set-type distribution (depends on display order)
-        type_counts = {"Triad clean": 0, "Hybrid clean": 0, "Triad +1R": 0, "Hybrid +1R": 0, "Multi-Redundant": 0}
-        seen_for_dist = set()
+        type_counts = {
+            "Green: Pure Maxxing": 0,
+            "Blue: Redundant Sidearm + Pure": 0,
+            "Light Blue: Redundant Sidearm + Hybrid (Heavy)": 0,
+            "Orange: Redundant Sidearm + Hybrid (Light)": 0,
+            "Red: Multiple Redundancies": 0
+        }
         score_rows = []
         for s_entry in res_sets:
-            active_w = [w for w in s_entry['weapons'] if w is not None]
-            if not active_w:
-                continue
-            redundant_count = sum(1 for w in active_w if w['id'] in seen_for_dist)
-            badge_symbol, lbl = classify_set(active_w, redundant_count)
+            lbl = s_entry.get('tier_name', "Red: Multiple Redundancy")
             if lbl in type_counts:
                 type_counts[lbl] += 1
-            avg_score = sum(w['score'] for w in active_w) / len(active_w)
-            score_rows.append({"Score": avg_score, "Label": lbl, "Badge": badge_symbol})
-            for w in active_w:
-                seen_for_dist.add(w['id'])
+            avg_score = s_entry.get('avg_score', 0.0)
+            score_rows.append({"Score": avg_score, "Label": lbl})
 
         st.header(f"⚖️ {len(res_sets)} generated {strat} loadouts")
         
@@ -915,7 +993,6 @@ with t2:
             
             # Prepare data for plots
             stats_df = df[df['id'].isin(st.session_state.locker)].copy()
-            
             stats_df['role_label'] = stats_df.apply(get_role, axis=1)
             
             # Plot 1: weapons per role
@@ -931,12 +1008,18 @@ with t2:
                 st.subheader("Most common calibers (Top 10)")
                 st.bar_chart(ammo_counts)
 
-            st.subheader("Set distribution by color")
+            st.subheader("Set distribution by Tier color")
             dist_df = pd.DataFrame([
                 {"Category": k, "Count": v} for k, v in type_counts.items()
             ])
-            order = ["Triad clean", "Hybrid clean", "Triad +1R", "Hybrid +1R", "Multi-Redundant"]
-            colors = ["#2ecc71", "#3498db", "#5dade2", "#e67e22", "#e74c3c"]
+            order = [
+                "Green: Pure Maxxing",
+                "Blue: Redundant Sidearm + Pure",
+                "Light Blue: Redundant Sidearm + Hybrid (Heavy)",
+                "Orange: Redundant Sidearm + Hybrid (Light)",
+                "Red: Multiple Redundancies"
+            ]
+            colors = ["#2ecc71", "#3498db", "#95a5a6", "#e67e22", "#e74c3c"]
             chart = (
                 alt.Chart(dist_df)
                 .mark_bar()
@@ -948,14 +1031,6 @@ with t2:
                 .properties(width="container")
             )
             st.altair_chart(chart)
-            st.caption("Legend: 🟩 Triad clean | 🟦 Hybrid clean | 🩵 Triad +1R | 🟧 Hybrid +1R | 🟥 Multi-Redundant")
-            with st.expander("Legend details"):
-                st.markdown(
-                    "- 🟩 Triad clean: 0 redundancy, classic trio (Sidearm + Power + Workhorse) without Shotgun/SMG (slot!=1)\n"
-                    "- 🟦 Hybrid clean: 0 redundancy, contains Shotgun or SMG (slot!=1)\n"
-                    "- 🩵 Triad +1R: exactly 1 redundancy, no hybrid\n"
-                    "- 🟧 Hybrid +1R: exactly 1 redundancy, with Shotgun/SMG (slot!=1)\n"
-                    "- 🟥 Multi-Redundant: two or more redundancies")
 
             if score_rows:
                 st.subheader("Set score distribution")
@@ -1006,14 +1081,13 @@ with t2:
 
         # Apply sorting
         if sort_mode == "By score":
-            phase_priority = {"P1": 0, "P2H0": 1, "P1R1": 2, "P2H1": 3, "P3": 4}
             def score_sort_key(s):
                 active = [w for w in s['weapons'] if w is not None]
                 avg_score = sum(w['score'] for w in active) / len(active) if active else 0
-                return (phase_priority.get(s.get('phase', 'P3'), 99), -avg_score)
+                return (s.get('tier_val', 50), -avg_score)
             res_sets = sorted(res_sets, key=score_sort_key)
         else:
-            res_sets = sorted(res_sets, key=lambda s: s.get('order', 0))
+            res_sets = sorted(res_sets, key=lambda s: s.get('tier_val', 50))
 
         if set_search.strip():
             q = set_search.strip().lower()
@@ -1043,21 +1117,31 @@ with t2:
             active_w = [w for w in s if w is not None]
             if not active_w:
                 continue
-            avg = sum(w['score'] for w in active_w) / len(active_w)
+            avg = s_entry.get('avg_score', 0.0)
+            
+            # Tier information from drafting
+            tier_val_raw = s_entry.get('tier_val', 50)
+            badge = s_entry.get('badge', "🟥")
+            tier_name = s_entry.get('tier_name', "Red: Multiple Redundancies")
+            
+            # Simplified Tier for sorting/display
+            if tier_val_raw >= 50:
+                tier_val = 5
+            else:
+                tier_val = tier_val_raw
+
             set_has_redundant = any(w['id'] in seen_ids for w in active_w)
-            redundant_count = sum(1 for w in active_w if w['id'] in seen_ids)
-            badge, badge_label = classify_set(active_w, redundant_count)
             title_suffix = " (🔄 Redundant)" if set_has_redundant else ""
             phase_label = f" {badge}" if badge else ""
 
             with st.expander(
                 f"{phase_label} SET {idx+1}{title_suffix} (Ø-Rating: {avg:.2f})",
-                expanded=(False if collapse_all else idx < 2)
+                expanded=False
             ):
                 cols = st.columns(3)
                 labels = ["Sidearm", "Primary (Power)", "Secondary (Workhorse)"]
                 set_order = [2, 0, 1]
-                st.caption(f"Badge: {badge} ({badge_label}) | Phase: {phase or 'n/a'} | Redundant: {set_has_redundant}")
+                st.caption(f"Badge: {badge} ({tier_name}) | Phase: {phase or 'n/a'} | Redundant: {set_has_redundant}")
                 for i, idx2 in enumerate(set_order):
                     if idx2 >= len(s):
                         continue
@@ -1081,6 +1165,36 @@ with t2:
                         st.write(f"📦 {w['ammo_display']}")
                         st.write(f"⭐ Score: {w['score']:.3f}")
                         st.progress(min(max(w['score'] / 100.0, 0.0), 1.0))
+                        if show_raw_stats_cards:
+                            with st.expander("📊 Raw stats", expanded=False):
+                                hit_raw = float(w.get('hit', 0) or 0)
+                                rpm_raw = int(float(w.get('rpm', 0) or 0))
+                                rec_raw = float(w.get('rec', 0) or 0)
+                                rec_ltx_raw = float(w.get('rec_ltx', rec_raw) or rec_raw)
+                                mag_raw = int(float(w.get('mag', 0) or 0))
+                                cal_weight = get_caliber_weight(w.get('ammo', ''))
+                                recoil_rating = float(w.get('recoil_rating', 0) or 0)
+                                stats_source = str(w.get('stats_source', 'ltx'))
+                                ingame_damage = parse_number(w.get('ingame_damage'))
+                                ingame_fire_rate = parse_number(w.get('ingame_fire_rate'))
+                                ingame_mag_size = parse_number(w.get('ingame_mag_size'))
+                                ingame_recoil_control = parse_number(w.get('ingame_recoil_control'))
+                                recoil_control_ltx = max(1.0, min(100.0, 101.0 - (rec_raw * 100.0)))
+                                st.caption(
+                                    f"Scoring inputs (LTX): DMG: {int(hit_raw * 100)} | RPM: {rpm_raw} | Mag: {mag_raw} | rec: {rec_raw:.3f} (~RC {recoil_control_ltx:.1f}) | Caliber weight: {cal_weight:.2f}"
+                                )
+                                st.caption(
+                                    f"Raw: {float(w.get('raw_score', 0)):.3f} | Cal-Adj: {float(w.get('raw_adjusted', 0)):.3f} | Unified score: {float(w.get('final_score', 0)):.3f}"
+                                )
+                                if stats_source == 'ingame':
+                                    st.caption(
+                                        f"Ingame snapshot (display only): Acc {parse_number(w.get('ingame_accuracy')) or 0:.0f}% | "
+                                        f"Handling {parse_number(w.get('ingame_handling')) or 0:.0f}% | Damage {ingame_damage or 0:.0f} | "
+                                        f"Fire Rate {ingame_fire_rate or 0:.0f} | Mag {ingame_mag_size or 0:.0f} | "
+                                        f"Reliability {parse_number(w.get('ingame_reliability')) or 0:.0f}% | Recoil Control {ingame_recoil_control or 0:.0f}"
+                                    )
+                                else:
+                                    st.caption(f"Source: ltx exported values | LTX rec: {rec_ltx_raw:.3f} | Recoil rating percentile: {recoil_rating:.1f}")
                     seen_ids.add(w['id'])
 
     save_ui_prefs()

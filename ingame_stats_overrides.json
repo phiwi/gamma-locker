@@ -1,0 +1,57 @@
+{
+  "name:AK-74 \"PMC\"": {
+    "accuracy": 79,
+    "handling": 76,
+    "damage": 37,
+    "fire_rate": 650,
+    "mag_size": 45,
+    "max_range": 1000,
+    "muzzle_velocity": 940,
+    "reliability": 92,
+    "recoil_control": 61
+  },
+  "name:Glock 19 \"Hornet\"": {
+    "accuracy": 76,
+    "handling": 82,
+    "damage": 21,
+    "fire_rate": 1200,
+    "mag_size": 40,
+    "max_range": 400,
+    "muzzle_velocity": 473,
+    "reliability": 89,
+    "recoil_control": 43
+  },
+  "name:Desert Tech MDR 7.62x51": {
+    "accuracy": 89,
+    "handling": 80,
+    "damage": 59,
+    "fire_rate": 650,
+    "mag_size": 30,
+    "max_range": 1100,
+    "muzzle_velocity": 856,
+    "reliability": 84,
+    "recoil_control": 42
+  },
+  "wpn_dtmdr_black": {
+    "accuracy": 89,
+    "handling": 80,
+    "damage": 59,
+    "fire_rate": 650,
+    "mag_size": 30,
+    "max_range": 1100,
+    "muzzle_velocity": 856,
+    "reliability": 84,
+    "recoil_control": 42
+  },
+  "wpn_dtmdr_black_p1x42": {
+    "accuracy": 89,
+    "handling": 80,
+    "damage": 59,
+    "fire_rate": 650,
+    "mag_size": 30,
+    "max_range": 1100,
+    "muzzle_velocity": 856,
+    "reliability": 84,
+    "recoil_control": 42
+  }
+}
