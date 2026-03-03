@@ -406,45 +406,32 @@ def calculate_all_sets(inventory_ids, strategy):
     final_sets = []
 
     def get_tier_info(triple):
-        # 1) GREEN: Pure maxxing (Heavy + Light) until sidearm runs out.
-        # 2) BLUE: Redundant sidearm + pure maxxing (Heavy + Light)
-        # 3) LIGHT BLUE: Redundant sidearm + Hybrid mode: Heavy + MP/Shotgun
-        # 4) ORANGE: Redundant sidearm + Hybrid mode: Light + MP/Shotgun
-        # 5) RED: Now continue fill up sets with more redundancies until all weapons are drafted.
-        
         p, wh, s = triple
-        red_p = usage[p['id']] > 0
-        red_wh = usage[wh['id']] > 0
-        red_s = usage[s['id']] > 0
+        red_count = sum(1 for w in (p, wh, s) if usage.get(w['id'], 0) > 0)
         
-        is_hybrid = not is_light_weapon(wh) and is_mp_or_shotgun_workhorse(wh)
-        is_pure = is_light_weapon(wh)
+        is_p_heavy = p['id'] in base_power_ids
+        is_p_light = p['id'] in flex_light_ids
+        is_wh_light = is_light_weapon(wh)
+        is_wh_hybrid = is_mp_or_shotgun_workhorse(wh)
         
-        # Tier 1: Green (Pure, No Redundancies)
-        if not red_p and not red_wh and not red_s and is_pure:
-            return 1, "🟩", "Green: Pure Maxxing"
+        is_standard = is_p_heavy and is_wh_light
+        is_heavy_hybrid = is_p_heavy and is_wh_hybrid
         
-        # Tier 2: Blue (Redundant sidearm + pure maxxing)
-        if not red_p and not red_wh and red_s and is_pure:
-            return 2, "🟦", "Blue: Redundant Sidearm + Pure"
-            
-        # Tier 3: Light Blue (Redundant sidearm + Hybrid mode: Heavy + MP/Shotgun)
-        if not red_p and not red_wh and red_s and is_hybrid and not is_light_weapon(p):
-            return 3, "🔲", "Light Blue: Redundant Sidearm + Hybrid (Heavy)"
-            
-        # Tier 4: Orange (Redundant sidearm + Hybrid mode: Light + MP/Shotgun)
-        # Note: In hybrid light mode, p is light and wh is smg/shotgun
-        if not red_p and not red_wh and red_s and is_hybrid and is_light_weapon(p):
-            return 4, "🟧", "Orange: Redundant Sidearm + Hybrid (Light)"
-            
-        # Tier 5: Red (Anything else / more redundancies)
-        # Improvement: Sub-tiering within Red based on redundancy count and "Hybrid-ness"
-        red_count = (1 if red_p else 0) + (1 if red_wh else 0) + (1 if red_s else 0)
-        # We want to penalize hybrid builds within Tier 5 so Normal builds are picked first
-        hybrid_penalty = 10 if is_hybrid else 0
-        tier_val = 50 + (red_count * 10) + hybrid_penalty
-        
-        return tier_val, "🟥", "Red: Multiple Redundancies"
+        sub_name = "Light Hybrid"
+        sub_val = 3
+        if is_standard:
+            sub_name = "Standard"
+            sub_val = 1
+        elif is_heavy_hybrid:
+            sub_name = "Heavy Hybrid"
+            sub_val = 2
+
+        if red_count == 0:
+            return 10 + sub_val, "🟩", f"Green: Flawless ({sub_name})"
+        elif red_count == 1:
+            return 20 + sub_val, "🟦", f"Blue: Single Deficit ({sub_name})"
+        else:
+            return 30 + sub_val, "🟧", f"Orange: Double Deficit ({sub_name})"
 
     def add_set(triple, phase):
         order_idx = len(final_sets)
@@ -484,42 +471,34 @@ def calculate_all_sets(inventory_ids, strategy):
         return -abs(target_average_score - total)
 
     def choose_best(candidates):
-            if not candidates:
-                return None
-            
-            # Group by tiers first
-            tier_groups = {}
-            for t in candidates:
-                tv, _, _ = get_tier_info(t)
-                tier_groups.setdefault(tv, []).append(t)
-            
-            for tv in sorted(tier_groups.keys()):
-                group = tier_groups[tv]
-                
-                # Tier 1: Pure Maxxing (Unique + Non-redundant)
-                # In Tier 1, we still want to apply the strategy (Maxxed or Balanced)
-                if tv == 1:
-                    best_f = max(triple_fitness(t) for t in group)
-                    top = [t for t in group if triple_fitness(t) == best_f]
-                    return random.choice(top)
-                
-                # Tiers 2-5: Redundant tiers
-                # Request (C): ALWAYS sample uniformly from the redundant set.
-                # SPECIAL CASE: In "Balanced" mode, we still want to avoid extreme score outliers 
-                # even in redundant sets to keep the 'Feel' balanced.
-                if strategy == "Balanced":
-                    # Filter for sets that are reasonably close to the target average (within 25%)
-                    # to keep the "Balanced" promise while still allowing variety.
-                    f_scores = [triple_fitness(t) for t in group]
-                    max_f = max(f_scores)
-                    min_f = min(f_scores)
-                    threshold = max_f - (max_f - min_f) * 0.4 # Keep top 40% of 'balanced' candidates
-                    balanced_group = [t for t in group if triple_fitness(t) >= threshold]
-                    return random.choice(balanced_group)
-                
-                # In Maxxed mode: True uniform random sampling for variety as requested.
-                return random.choice(group)
+        if not candidates:
             return None
+        
+        tier_groups = {}
+        for t in candidates:
+            tv, _, _ = get_tier_info(t)
+            tier_groups.setdefault(tv, []).append(t)
+        
+        for tv in sorted(tier_groups.keys()):
+            group = tier_groups[tv]
+            
+            # Green Tiers (11, 12, 13)
+            if tv < 20:
+                best_f = max(triple_fitness(t) for t in group)
+                top = [t for t in group if triple_fitness(t) == best_f]
+                return random.choice(top)
+            
+            # Redundant tiers (Blue: 20+, Orange: 30+)
+            if strategy == "Balanced":
+                f_scores = [triple_fitness(t) for t in group]
+                max_f = max(f_scores)
+                min_f = min(f_scores)
+                threshold = max_f - (max_f - min_f) * 0.4
+                balanced_group = [t for t in group if triple_fitness(t) >= threshold]
+                return random.choice(balanced_group)
+            
+            return random.choice(group)
+        return None
 
     # Draft loop: Continue as long as we can find ANY valid set 
     # that uses at least one new weapon (to ensure progress).
@@ -901,15 +880,19 @@ with t2:
 
         # Precompute set-type distribution (depends on display order)
         type_counts = {
-            "Green: Pure Maxxing": 0,
-            "Blue: Redundant Sidearm + Pure": 0,
-            "Light Blue: Redundant Sidearm + Hybrid (Heavy)": 0,
-            "Orange: Redundant Sidearm + Hybrid (Light)": 0,
-            "Red: Multiple Redundancies": 0
+            "Green: Flawless (Standard)": 0,
+            "Green: Flawless (Heavy Hybrid)": 0,
+            "Green: Flawless (Light Hybrid)": 0,
+            "Blue: Single Deficit (Standard)": 0,
+            "Blue: Single Deficit (Heavy Hybrid)": 0,
+            "Blue: Single Deficit (Light Hybrid)": 0,
+            "Orange: Double Deficit (Standard)": 0,
+            "Orange: Double Deficit (Heavy Hybrid)": 0,
+            "Orange: Double Deficit (Light Hybrid)": 0
         }
         score_rows = []
         for s_entry in res_sets:
-            lbl = s_entry.get('tier_name', "Red: Multiple Redundancy")
+            lbl = s_entry.get('tier_name', "Orange: Double Deficit (Standard)")
             if lbl in type_counts:
                 type_counts[lbl] += 1
             avg_score = s_entry.get('avg_score', 0.0)
@@ -942,13 +925,7 @@ with t2:
             dist_df = pd.DataFrame([
                 {"Category": k, "Count": v} for k, v in type_counts.items()
             ])
-            order = [
-                "Green: Pure Maxxing",
-                "Blue: Redundant Sidearm + Pure",
-                "Light Blue: Redundant Sidearm + Hybrid (Heavy)",
-                "Orange: Redundant Sidearm + Hybrid (Light)",
-                "Red: Multiple Redundancies"
-            ]
+            order = list(type_counts.keys())
             colors = ["#2ecc71", "#3498db", "#95a5a6", "#e67e22", "#e74c3c"]
             chart = (
                 alt.Chart(dist_df)
@@ -1054,11 +1031,7 @@ with t2:
             badge = s_entry.get('badge', "🟥")
             tier_name = s_entry.get('tier_name', "Red: Multiple Redundancies")
             
-            # Simplified Tier for sorting/display
-            if tier_val_raw >= 50:
-                tier_val = 5
-            else:
-                tier_val = tier_val_raw
+            tier_val = tier_val_raw
 
             set_has_redundant = any(w['id'] in seen_ids for w in active_w)
             title_suffix = " (🔄 Redundant)" if set_has_redundant else ""
