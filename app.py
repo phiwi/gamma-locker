@@ -14,7 +14,6 @@ DATA_DIR = "loadout_lab_data"
 LOCKER_FILE = os.path.join(DATA_DIR, "my_locker.json")
 BACKUP_FILE = os.path.join(DATA_DIR, "my_locker_backup.json")
 UI_PREFS_FILE = os.path.join(DATA_DIR, "ui_prefs.json")
-INGAME_STATS_FILE = "ingame_stats_overrides.json"
 SAVE_DIR = "/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/appdata/savedgames/"
 SAVE_DIR = str(get_path("save_dir", SAVE_DIR))
 
@@ -170,74 +169,6 @@ def parse_number(value):
     except Exception:
         return None
 
-def load_ingame_stats_overrides():
-    if not os.path.exists(INGAME_STATS_FILE):
-        return {}
-    try:
-        with open(INGAME_STATS_FILE, "r", encoding="utf-8") as f:
-            payload = json.load(f)
-            return payload if isinstance(payload, dict) else {}
-    except Exception:
-        return {}
-
-def apply_ingame_stats_overrides(df_local):
-    overrides = load_ingame_stats_overrides()
-    df_local = df_local.copy()
-    df_local['rec_ltx'] = df_local['rec']
-    df_local['stats_source'] = 'ltx'
-    df_local['ingame_accuracy'] = pd.NA
-    df_local['ingame_handling'] = pd.NA
-    df_local['ingame_damage'] = pd.NA
-    df_local['ingame_fire_rate'] = pd.NA
-    df_local['ingame_mag_size'] = pd.NA
-    df_local['ingame_max_range'] = pd.NA
-    df_local['ingame_muzzle_velocity'] = pd.NA
-    df_local['ingame_reliability'] = pd.NA
-    df_local['ingame_recoil_control'] = pd.NA
-
-    for weapon_id, data in overrides.items():
-        if not isinstance(data, dict):
-            continue
-        if str(weapon_id).startswith("name:"):
-            name_query = str(weapon_id)[5:].strip().lower()
-            mask = df_local['real_name'].astype(str).str.lower() == name_query
-        else:
-            mask = df_local['id'] == weapon_id
-        if not mask.any():
-            continue
-
-        accuracy = parse_number(data.get('accuracy'))
-        handling = parse_number(data.get('handling'))
-        damage = parse_number(data.get('damage'))
-        fire_rate = parse_number(data.get('fire_rate'))
-        mag_size = parse_number(data.get('mag_size'))
-        max_range = parse_number(data.get('max_range'))
-        muzzle_velocity = parse_number(data.get('muzzle_velocity'))
-        reliability = parse_number(data.get('reliability'))
-        recoil_control = parse_number(data.get('recoil_control'))
-
-        df_local.loc[mask, 'stats_source'] = 'ingame'
-        if accuracy is not None:
-            df_local.loc[mask, 'ingame_accuracy'] = accuracy
-        if handling is not None:
-            df_local.loc[mask, 'ingame_handling'] = handling
-        if damage is not None:
-            df_local.loc[mask, 'ingame_damage'] = damage
-        if fire_rate is not None:
-            df_local.loc[mask, 'ingame_fire_rate'] = fire_rate
-        if mag_size is not None:
-            df_local.loc[mask, 'ingame_mag_size'] = mag_size
-        if max_range is not None:
-            df_local.loc[mask, 'ingame_max_range'] = max_range
-        if muzzle_velocity is not None:
-            df_local.loc[mask, 'ingame_muzzle_velocity'] = muzzle_velocity
-        if reliability is not None:
-            df_local.loc[mask, 'ingame_reliability'] = reliability
-        if recoil_control is not None:
-            df_local.loc[mask, 'ingame_recoil_control'] = recoil_control
-
-    return df_local
-
 def compute_score(row):
     hit = float(row.get('hit', 0))
     rpm = float(row.get('rpm', 0))
@@ -376,7 +307,6 @@ def load_data():
     name_mask = df['real_name'].fillna('').str.lower().str.contains('knife|melee|axe|tomahawk', na=False)
     id_mask = df['id'].fillna('').str.lower().str.contains('knife|melee|axe|tomahawk', na=False)
     df = df[~(melee_mask | name_mask | id_mask)].reset_index(drop=True)
-    df = apply_ingame_stats_overrides(df)
     df['pretty_name'] = df.get('real_name', df['id'])
     df['ammo_display'] = df['ammo'].apply(prettify_ammo)
     if 'mutant_killer' not in df.columns:
@@ -1170,15 +1100,9 @@ with t2:
                                 hit_raw = float(w.get('hit', 0) or 0)
                                 rpm_raw = int(float(w.get('rpm', 0) or 0))
                                 rec_raw = float(w.get('rec', 0) or 0)
-                                rec_ltx_raw = float(w.get('rec_ltx', rec_raw) or rec_raw)
                                 mag_raw = int(float(w.get('mag', 0) or 0))
                                 cal_weight = get_caliber_weight(w.get('ammo', ''))
                                 recoil_rating = float(w.get('recoil_rating', 0) or 0)
-                                stats_source = str(w.get('stats_source', 'ltx'))
-                                ingame_damage = parse_number(w.get('ingame_damage'))
-                                ingame_fire_rate = parse_number(w.get('ingame_fire_rate'))
-                                ingame_mag_size = parse_number(w.get('ingame_mag_size'))
-                                ingame_recoil_control = parse_number(w.get('ingame_recoil_control'))
                                 recoil_control_ltx = max(1.0, min(100.0, 101.0 - (rec_raw * 100.0)))
                                 st.caption(
                                     f"Scoring inputs (LTX): DMG: {int(hit_raw * 100)} | RPM: {rpm_raw} | Mag: {mag_raw} | rec: {rec_raw:.3f} (~RC {recoil_control_ltx:.1f}) | Caliber weight: {cal_weight:.2f}"
@@ -1186,15 +1110,7 @@ with t2:
                                 st.caption(
                                     f"Raw: {float(w.get('raw_score', 0)):.3f} | Cal-Adj: {float(w.get('raw_adjusted', 0)):.3f} | Unified score: {float(w.get('final_score', 0)):.3f}"
                                 )
-                                if stats_source == 'ingame':
-                                    st.caption(
-                                        f"Ingame snapshot (display only): Acc {parse_number(w.get('ingame_accuracy')) or 0:.0f}% | "
-                                        f"Handling {parse_number(w.get('ingame_handling')) or 0:.0f}% | Damage {ingame_damage or 0:.0f} | "
-                                        f"Fire Rate {ingame_fire_rate or 0:.0f} | Mag {ingame_mag_size or 0:.0f} | "
-                                        f"Reliability {parse_number(w.get('ingame_reliability')) or 0:.0f}% | Recoil Control {ingame_recoil_control or 0:.0f}"
-                                    )
-                                else:
-                                    st.caption(f"Source: ltx exported values | LTX rec: {rec_ltx_raw:.3f} | Recoil rating percentile: {recoil_rating:.1f}")
+                                st.caption(f"Source: ltx exported values | Recoil rating percentile: {recoil_rating:.1f}")
                     seen_ids.add(w['id'])
 
     save_ui_prefs()
