@@ -302,6 +302,10 @@ def load_data():
         st.error("Missing loadout_lab_data/weapons_stats.csv. Run: python3 scraper.py")
         st.stop()
     df = pd.read_csv(stats_file)
+    
+    # Manual Data Overrides
+    df.loc[df['id'] == 'wpn_fn2000_nimble', 'real_name'] = 'FN F2000 "Competitor"'
+    
     # Drop melee/knife rows entirely (by class or name/id hints)
     melee_mask = df['class'].fillna('').str.lower().str.contains('knife|melee|axe|tomahawk', na=False)
     name_mask = df['real_name'].fillna('').str.lower().str.contains('knife|melee|axe|tomahawk', na=False)

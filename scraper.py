@@ -213,6 +213,10 @@ for sec, d in tqdm.tqdm(registry.items()):
         gh = clean_num(get_v(sec, 'inv_grid_height', registry)) or 1
         tex = get_v(sec, 'icons_texture', registry) or "ui\\ui_icon_equipment"
         
+        if sec == 'wpn_fn2000_nimble':
+            real_name = 'FN F2000 "Competitor"'
+            gx, gy = 40.0, 36.0
+            
         final.append({
             'id': sec, 'real_name': real_name, 'hit': hit, 'rpm': rpm, 'slot': slot,
             'acc': clean_num(get_v(sec, 'fire_dispersion_base', registry)) or 0.5,
