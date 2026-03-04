@@ -81,7 +81,7 @@ JUNK_PATTERNS = [
     r'_mepro', r'_rakurs', r'_0kp2', r'_rmr', r'_deltapoint', r'_compm4s', r'_pka', 
     r'_1p29', r'_kobra', r'_ps01', r'_pso', r'_1pn93', r'_triji', r'_spec', r'_mark8',
     r'_romeo4', r'_hco', r'_t12', r'_monstrum', r'_trihawk', r'_vulcan', r'_echo1',
-    r'_n_', r'_n$', r'_cw', r'_up', r'_sk1', r'_sk2', r'_camo', r'_custom', r'_new', 
+    r'_n_', r'_n$', r'_cw', r'_up', r'_sk1', r'_sk2', r'_camo', r'_new', 
     r'_rusty', r'_worn', r'_old', r'_1p', r'_ap_', r'_dot', r'_sil', r'_tgp', r'_pbs',
     r'_kzis', r'_usp1', r'_okp', r'_1g', r'_bas', r'_1p63', r'_1p59', r'_pso1m21', r'_ekp8_02', r'_pso2', r'_1p78gs', r'_1pn93n2_1gs', r'_1p76',
     r'_c1$', r'_c2$', r'_c3$', r'_c4$', r'_k1$', r'_k2$', r'_k3$'
