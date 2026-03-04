@@ -1216,10 +1216,14 @@ with t2:
                                 mag_raw = int(float(w.get('mag', 0) or 0))
 
                                 cols_ui = st.columns(4)
-                                cols_ui[0].metric("DMG", f"{hit_raw:.3f}")
-                                cols_ui[1].metric("RPM", f"{rpm_raw}")
-                                cols_ui[2].metric("MAG", f"{mag_raw}")
-                                cols_ui[3].metric("REC", f"{rec_raw:.3f}")
+                                cols_ui[0].caption("DMG")
+                                cols_ui[0].write(f"{hit_raw:.3f}")
+                                cols_ui[1].caption("RPM")
+                                cols_ui[1].write(f"{rpm_raw:d}")
+                                cols_ui[2].caption("MAG")
+                                cols_ui[2].write(f"{mag_raw:d}")
+                                cols_ui[3].caption("REC")
+                                cols_ui[3].write(f"{rec_raw:.3f}")
                     seen_ids.add(w['id'])
 
     save_ui_prefs()
