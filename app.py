@@ -368,15 +368,9 @@ def calculate_all_sets(inventory_ids, strategy):
     powers = [w for w in all_w if w['role_label'] == 'Power']
     # Workhorse darf nur Light, MP oder Shotgun sein (Heavy-Kaliber ausgeschlossen)
     def is_valid_workhorse(w):
-        ammo = str(w.get('ammo', '')).lower()
-        cls = str(w.get('class', '')).lower()
-        # Light-Kaliber
-        if any(cal in ammo for cal in GROUP_LIGHT):
-            return True
-        # MP/Shotgun
-        if ('smg' in cls) or ('shotgun' in cls):
-            return True
-        return False
+        # In the new logic, basically anything that isn't actively drafted as a Power or Sidearm MUST be allowed as a Workhorse
+        # Otherwise the inventory stalls.
+        return True
     workhorses = [w for w in all_w if w['role_label'] == 'Workhorse' and is_valid_workhorse(w)]
 
     def is_light_weapon(w):
@@ -526,6 +520,16 @@ def calculate_all_sets(inventory_ids, strategy):
             if not is_valid_set(s, p, wh): continue
             if any(w['id'] in unused_ids for w in (p, wh, s)):
                 candidate_triples.append((p, wh, s))
+
+        # 3. Orange Tier / Absolute Failsafe:
+        # If no standard or hybrid set fits because we just have 13 snipers left, we just jam them into a set.
+        if not candidate_triples:
+            unused = [w for w in all_w if w['id'] in unused_ids]
+            if unused:
+                u1 = unused[0]
+                u2 = unused[1] if len(unused) > 1 else random.choice(all_w)
+                u3 = unused[2] if len(unused) > 2 else random.choice(all_w)
+                candidate_triples.append((u1, u2, u3))
 
         best = choose_best(candidate_triples)
         if not best:
