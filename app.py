@@ -188,8 +188,17 @@ def compute_adjusted_score(row):
     rpm = float(row.get('rpm', 0))
     rec = max(float(row.get('rec', 0)), 0.01)
     mag = float(row.get('mag', 0))
+    
+    # LASER WEAPON BONUS: Reduce recoil penalty for low-recoil weapons
+    # This makes high-fire-rate, low-recoil weapons (FN2000, Howa) more competitive
+    # with high-damage snipers.
+    if rec < 0.6:
+        rec_factor = rec * 0.8  # 20% reduction in recoil penalty for lasers
+    else:
+        rec_factor = rec
+        
     adjusted_hit = hit * get_caliber_weight(row.get('ammo', ''))
-    return (adjusted_hit * rpm) / rec + (mag * 0.5)
+    return (adjusted_hit * rpm) / rec_factor + (mag * 0.5)
 
 def get_score_bucket(row):
     cls_raw = str(row.get('class', '')).lower()
@@ -297,6 +306,11 @@ def get_role(r):
         return "Sidearm"
     if slot == 1 and cls_raw == "pistol":
         return "Sidearm"
+    
+    # FORCED POWER: Any weapon using heavy calibers MUST be a Power weapon.
+    if any(cal in ammo for cal in GROUP_HEAVY):
+        return "Power"
+        
     if "6.8x51" in ammo or any(a in ammo for a in POWER_AMMO):
         return "Power"
     return "Workhorse"
