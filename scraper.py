@@ -121,20 +121,32 @@ def get_weapon_class(sec, ammo, slot, d, registry):
 
 print("📂 Scanning weapon data...")
 registry = {}
+
+all_files = []
 for scan_path in SCAN_PATHS:
     if not scan_path.exists(): continue
-    for root, _, files in os.walk(scan_path):
-        p_parts = Path(root).parts
-        mod_name = "Vanilla"
-        if "mods" in p_parts:
-            m_idx = p_parts.index("mods")
-            if len(p_parts) > m_idx + 1: mod_name = p_parts[m_idx + 1]
-            else: continue
-        
+    for root, dirs, files in os.walk(scan_path):
         for f in files:
             if f.endswith(".ltx"):
-                try:
-                    with open(os.path.join(root, f), 'r', encoding='utf-8', errors='ignore') as l:
+                all_files.append((root, f))
+
+# Sort to roughly enforce numbered MO2 load order (e.g. 348- overrides 001-)
+all_files.sort()
+
+# Reconstruct original loops logic
+import tqdm
+for root, f in tqdm.tqdm(all_files, desc="Parsing LTX files", leave=False):
+    scan_path = root
+
+    p_parts = Path(root).parts
+    mod_name = "Vanilla"
+    if "mods" in p_parts:
+        m_idx = p_parts.index("mods")
+        if len(p_parts) > m_idx + 1: mod_name = p_parts[m_idx + 1]
+        else: continue
+    
+    try:
+        with open(os.path.join(root, f), 'r', encoding='utf-8', errors='ignore') as l:
                         curr = None
                         for line in l:
                             line = line.strip()
@@ -172,7 +184,7 @@ for scan_path in SCAN_PATHS:
                                 key = parts[0].strip().lower()
                                 val = parts[1].split(';')[0].strip().strip('"')
                                 registry[curr][key] = val
-                except: continue
+    except: continue
 
 def get_v(sec, key, db, d=0):
     if d > 10 or not sec or sec not in db: return None
@@ -213,10 +225,6 @@ for sec, d in tqdm.tqdm(registry.items()):
         gh = clean_num(get_v(sec, 'inv_grid_height', registry)) or 1
         tex = get_v(sec, 'icons_texture', registry) or "ui\\ui_icon_equipment"
         
-        if sec == 'wpn_fn2000_nimble':
-            real_name = 'FN F2000 "Competitor"'
-            gx, gy = 40.0, 36.0
-            
         final.append({
             'id': sec, 'real_name': real_name, 'hit': hit, 'rpm': rpm, 'slot': slot,
             'acc': clean_num(get_v(sec, 'fire_dispersion_base', registry)) or 0.5,
