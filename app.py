@@ -535,10 +535,16 @@ def calculate_all_sets(inventory_ids, strategy):
         if not candidate_triples:
             unused = [w for w in all_w if w['id'] in unused_ids]
             if unused:
-                u1 = unused[0]
-                u2 = unused[1] if len(unused) > 1 else random.choice(all_w)
-                u3 = unused[2] if len(unused) > 2 else random.choice(all_w)
-                candidate_triples.append((u1, u2, u3))
+                # To strictly obey slot rules (Power, Workhorse, Sidearm), grab available unused items by class
+                u_p = [w for w in unused if w.get('role_label') == 'Power']
+                u_w = [w for w in unused if w.get('role_label') == 'Workhorse']
+                u_s = [w for w in unused if w.get('role_label') == 'Sidearm']
+
+                p = random.choice(u_p) if u_p else random.choice(powers)
+                wh = random.choice(u_w) if u_w else random.choice(workhorses)
+                s = random.choice(u_s) if u_s else random.choice(sidearms)
+
+                candidate_triples.append((p, wh, s))
 
         best = choose_best(candidate_triples)
         if not best:
