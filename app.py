@@ -809,9 +809,13 @@ with t0:
             locker_df['Icon'] = locker_df['id'].apply(get_icon_path)
             
             display_df = locker_df[['Remove', 'Icon', 'id', 'pretty_name', 'class', 'hit', 'rpm', 'rec', 'mag', 'score']].copy()
-            # show heatmap of scores for quick visual scan
-            styled = display_df.style.background_gradient(subset=['score'], cmap='viridis')
-            st.dataframe(styled, width='stretch', hide_index=True)
+            # show heatmap of scores for quick visual scan, if matplotlib is present
+            try:
+                import matplotlib  # noqa: F401
+                styled = display_df.style.background_gradient(subset=['score'], cmap='viridis')
+                st.dataframe(styled, width='stretch', hide_index=True)
+            except ImportError:
+                st.dataframe(display_df, width='stretch', hide_index=True)
             display_df.columns = ['Remove', 'Icon', 'ID', 'Name', 'Class', 'Damage', 'RPM', 'Recoil', 'Mag Size', 'Score']
             
             display_df['Score'] = display_df['Score'].round(3)
