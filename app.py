@@ -491,7 +491,15 @@ def calculate_all_sets(inventory_ids, strategy):
         })
 
     def triple_total(triple):
-        return sum(score_of(w) for w in triple)
+        # when maximizing, redundant weapons (usage>0) should not contribute
+        # to the score.  This prevents old sidearms/others from inflating a set's
+        # fitness and ensures active inventory drives ordering.
+        total = 0.0
+        for w in triple:
+            uid = w.get('id')
+            if uid and usage.get(uid, 0) == 0:
+                total += score_of(w)
+        return total
 
     def triple_fitness(triple):
         total = triple_total(triple)
