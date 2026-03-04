@@ -817,6 +817,8 @@ with t0:
                 st.dataframe(heat_df.style.background_gradient(subset=['score'], cmap='viridis'), width='stretch', hide_index=True)
             except ImportError:
                 pass
+
+            display_df.columns = ['Remove', 'Icon', 'ID', 'Name', 'Class', 'Damage', 'RPM', 'Recoil', 'Mag Size', 'Score']
             display_df['Score'] = display_df['Score'].round(3)
             display_df['Damage'] = (display_df['Damage'] * 100).astype(int)
             display_df['Recoil'] = display_df['Recoil'].round(3)
