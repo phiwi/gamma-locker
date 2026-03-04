@@ -812,11 +812,11 @@ with t0:
             # show heatmap of scores for quick visual scan if matplotlib is available
             try:
                 import matplotlib  # noqa: F401
-                  heat_df = display_df.drop(columns=['Remove','Icon']).copy()
-                  heat_df.columns = ['id','pretty_name','class','hit','rpm','rec','mag','score']
-                  st.dataframe(heat_df.style.background_gradient(subset=['score'], cmap='viridis'), width='stretch', hide_index=True)
-              except ImportError:
-                  pass
+                heat_df = display_df.drop(columns=['Remove','Icon']).copy()
+                heat_df.columns = ['id','pretty_name','class','hit','rpm','rec','mag','score']
+                st.dataframe(heat_df.style.background_gradient(subset=['score'], cmap='viridis'), width='stretch', hide_index=True)
+            except ImportError:
+                pass
             display_df['Score'] = display_df['Score'].round(3)
             display_df['Damage'] = (display_df['Damage'] * 100).astype(int)
             display_df['Recoil'] = display_df['Recoil'].round(3)
