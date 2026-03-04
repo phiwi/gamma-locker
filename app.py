@@ -926,7 +926,14 @@ with t2:
                 {"Category": k, "Count": v} for k, v in type_counts.items()
             ])
             order = list(type_counts.keys())
-            colors = ["#2ecc71", "#3498db", "#95a5a6", "#e67e22", "#e74c3c"]
+            
+            # Map 9 categories to their respective colors (3 Greens, 3 Blues, 3 Oranges)
+            colors = [
+                "#2ecc71", "#2ecc71", "#2ecc71",  # Greens
+                "#3498db", "#3498db", "#3498db",  # Blues
+                "#e67e22", "#e67e22", "#e67e22"   # Oranges
+            ]
+            
             chart = (
                 alt.Chart(dist_df)
                 .mark_bar()
