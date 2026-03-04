@@ -14,6 +14,17 @@ print("📝 Loading translations...")
 translations = {}
 import xml.etree.ElementTree as ET
 
+def load_strings_via_regex(file_path):
+    try:
+        raw = Path(file_path).read_text(encoding='utf-8', errors='ignore')
+    except Exception:
+        return
+    for m in re.finditer(r'<string\s+id="([^"]+)">\s*<text>(.*?)</text>', raw, re.IGNORECASE | re.DOTALL):
+        s_id = (m.group(1) or '').strip().lower()
+        s_text = (m.group(2) or '').strip()
+        if s_id and s_text:
+            translations[s_id] = s_text
+
 for t_path in TEXT_PATHS:
     if not t_path.exists(): continue
     for root, dirs, files in os.walk(t_path):
@@ -41,14 +52,21 @@ for t_path in TEXT_PATHS:
 
         for f in files:
             if f.endswith(".xml"):
+                p = os.path.join(root, f)
                 try:
-                    tree = ET.parse(os.path.join(root, f))
+                    tree = ET.parse(p)
+                    found_any = False
                     for string in tree.findall(".//string"):
                         s_id = string.get('id')
                         text_elem = string.find('text')
-                        if s_id and text_elem is not None:
+                        if s_id and text_elem is not None and text_elem.text:
                             translations[s_id.lower()] = text_elem.text
-                except: continue
+                            found_any = True
+                    if not found_any:
+                        load_strings_via_regex(p)
+                except Exception:
+                    # Some mod XML files are malformed; salvage strings via regex fallback.
+                    load_strings_via_regex(p)
 
 def translate(s_id):
     if not s_id: return None
