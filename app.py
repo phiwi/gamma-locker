@@ -147,7 +147,12 @@ def render_startup_health():
             st.caption("Fix: run python3 scraper.py to extract icon PNGs.")
 
 def apply_unified_score_to_df():
-    df['score'] = df['final_score']
+    # Display layer uses normalized score for readability; draft logic still
+    # uses final_score internally.
+    if 'global_norm_score' in df.columns:
+        df['score'] = df['global_norm_score']
+    else:
+        df['score'] = df['final_score']
 
 def prettify_ammo(ammo_raw):
     if pd.isna(ammo_raw):
@@ -346,8 +351,15 @@ def load_data():
     df['score_bucket'] = df.apply(get_score_bucket, axis=1)
     df['class_norm_score'] = compute_class_normalized_scores(df)
     df['final_score'] = df['raw_adjusted']
-    df['score'] = df['final_score']
+    df['global_norm_score'] = df['raw_adjusted'].rank(method='average', pct=True).fillna(0.0) * 100.0
     df['role_label'] = df.apply(get_role, axis=1)
+    df['role_norm_score'] = (
+        df.groupby('role_label')['raw_adjusted']
+        .rank(method='average', pct=True)
+        .fillna(0.0) * 100.0
+    )
+    # UI display score: stable and readable 0-100 scale
+    df['score'] = df['global_norm_score']
     return df
 
 df = load_data()
@@ -495,14 +507,15 @@ def _raw_calculate_all_sets(inventory_ids, strategy):
     def add_set(triple, phase):
         order_idx = len(final_sets)
         active_triple = [w for w in triple if w]
-        full_scores = [score_of(w) for w in active_triple]
+        raw_scores = [score_of(w) for w in active_triple]
+        display_scores = [float(w.get('score', score_of(w))) for w in active_triple]
         
         tier_val, badge, tier_name = get_tier_info(triple)
 
         weapon_payload = []
         for w in triple:
             w_copy = dict(w)
-            w_copy['score'] = score_of(w)
+            w_copy['draft_score_raw'] = score_of(w)
             weapon_payload.append(w_copy)
             
         for w in triple:
@@ -517,7 +530,8 @@ def _raw_calculate_all_sets(inventory_ids, strategy):
             "tier_val": tier_val,
             "tier_name": tier_name,
             "fitness": triple_fitness(triple),
-            "avg_score": (sum(full_scores) / len(full_scores)) if full_scores else 0.0,
+            "avg_score": (sum(display_scores) / len(display_scores)) if display_scores else 0.0,
+            "avg_score_raw": (sum(raw_scores) / len(raw_scores)) if raw_scores else 0.0,
         })
 
     def triple_total(triple):
@@ -949,7 +963,7 @@ with t2:
     if len(st.session_state.locker) < 3:
         st.warning("Add at least 3 weapons to generate sets.")
     else:
-        st.caption("Scoring: unified caliber-adjusted weapon score (same for Balanced and Maxxed)")
+        st.caption("Scoring: normalized display score (0-100) + raw draft fitness in background")
         # Diagnostics: role distribution in current locker
         locker_role_df = df[df['id'].isin(st.session_state.locker)].copy()
         role_counts_diag = locker_role_df['role_label'].value_counts()
@@ -1192,7 +1206,7 @@ with t2:
                         if w['mutant_killer']:
                             st.caption("🐗 Mutant Killer")
                         st.write(f"📦 {w['ammo_display']}")
-                        st.write(f"⭐ Score: {w['score']:.3f}")
+                        st.write(f"⭐ Score: {w['score']:.1f}/100")
                         st.progress(min(max(w['score'] / 100.0, 0.0), 1.0))
                         if show_raw_stats_cards:
                             with st.expander("📊 Raw stats", expanded=False):
@@ -1205,31 +1219,26 @@ with t2:
                                 handling_factor = float(w.get('handling', 1.0) or 1.0)
                                 acc_disp = float(w.get('acc', 0.5) or 0.5)
 
-                                # UI Mapping Calculations (Anomaly Style)
-                                ui_damage = int(hit_raw * 100)
-                                ui_accuracy = max(1, min(100, int(100 - (acc_disp * 100))))
-                                ui_handling = max(1, min(100, int(100 - (handling_factor * 20))))
-                                # Recoil is a complex mix in the UI; using a weighted mapping approximation
-                                ui_recoil = max(1, min(100, int(100 - ((rec_raw + rec_inc * 1.5 + rec_hor * 0.5) * 12))))
-
                                 cal_weight = get_caliber_weight(w.get('ammo', ''))
                                 recoil_rating = float(w.get('recoil_rating', 0) or 0)
-                                
-                                st.caption(f"**Estimated In-game UI Bars:**")
+                                global_norm = float(w.get('global_norm_score', w.get('score', 0)) or 0)
+                                role_norm = float(w.get('role_norm_score', 0) or 0)
+                                class_norm = float(w.get('class_norm_score', 0) or 0)
+
+                                st.caption("**Normalized indicators (0-100):**")
                                 cols_ui = st.columns(4)
-                                cols_ui[0].metric("DMG", f"{ui_damage}%")
-                                cols_ui[1].metric("ACC", f"{ui_accuracy}%")
-                                cols_ui[2].metric("HND", f"{ui_handling}%")
-                                cols_ui[3].metric("REC", f"{ui_recoil}%")
+                                cols_ui[0].metric("Global", f"{global_norm:.1f}")
+                                cols_ui[1].metric("Role", f"{role_norm:.1f}")
+                                cols_ui[2].metric("Class", f"{class_norm:.1f}")
+                                cols_ui[3].metric("Recoil Ctrl", f"{recoil_rating:.1f}")
 
                                 st.divider()
                                 st.caption(
-                                    f"Scoring inputs (LTX): DMG: {ui_damage} | RPM: {rpm_raw} | Mag: {mag_raw} | rec: {rec_raw:.3f} | Caliber weight: {cal_weight:.2f}"
+                                    f"LTX inputs: DMG(raw): {hit_raw:.3f} | RPM: {rpm_raw} | Mag: {mag_raw} | rec: {rec_raw:.3f} | cal weight: {cal_weight:.2f}"
                                 )
                                 st.caption(
-                                    f"Raw: {float(w.get('raw_score', 0)):.3f} | Cal-Adj: {float(w.get('raw_adjusted', 0)):.3f} | Unified score: {float(w.get('final_score', 0)):.3f}"
+                                    f"Draft raw: {float(w.get('final_score', 0)):.3f} | Display normalized: {global_norm:.1f}/100"
                                 )
-                                st.caption(f"Source: ltx exported values | Recoil rating percentile: {recoil_rating:.1f}")
                     seen_ids.add(w['id'])
 
     save_ui_prefs()
