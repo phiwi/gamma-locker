@@ -1213,32 +1213,13 @@ with t2:
                                 hit_raw = float(w.get('hit', 0) or 0)
                                 rpm_raw = int(float(w.get('rpm', 0) or 0))
                                 rec_raw = float(w.get('rec', 0) or 0)
-                                rec_inc = float(w.get('rec_inc', 0.1) or 0.1)
-                                rec_hor = float(w.get('rec_hor', 0.5) or 0.5)
                                 mag_raw = int(float(w.get('mag', 0) or 0))
-                                handling_factor = float(w.get('handling', 1.0) or 1.0)
-                                acc_disp = float(w.get('acc', 0.5) or 0.5)
 
-                                cal_weight = get_caliber_weight(w.get('ammo', ''))
-                                recoil_rating = float(w.get('recoil_rating', 0) or 0)
-                                global_norm = float(w.get('global_norm_score', w.get('score', 0)) or 0)
-                                role_norm = float(w.get('role_norm_score', 0) or 0)
-                                class_norm = float(w.get('class_norm_score', 0) or 0)
-
-                                st.caption("**Normalized indicators (0-100):**")
                                 cols_ui = st.columns(4)
-                                cols_ui[0].metric("Global", f"{global_norm:.1f}")
-                                cols_ui[1].metric("Role", f"{role_norm:.1f}")
-                                cols_ui[2].metric("Class", f"{class_norm:.1f}")
-                                cols_ui[3].metric("Recoil Ctrl", f"{recoil_rating:.1f}")
-
-                                st.divider()
-                                st.caption(
-                                    f"LTX inputs: DMG(raw): {hit_raw:.3f} | RPM: {rpm_raw} | Mag: {mag_raw} | rec: {rec_raw:.3f} | cal weight: {cal_weight:.2f}"
-                                )
-                                st.caption(
-                                    f"Draft raw: {float(w.get('final_score', 0)):.3f} | Display normalized: {global_norm:.1f}/100"
-                                )
+                                cols_ui[0].metric("DMG", f"{hit_raw:.3f}")
+                                cols_ui[1].metric("RPM", f"{rpm_raw}")
+                                cols_ui[2].metric("MAG", f"{mag_raw}")
+                                cols_ui[3].metric("REC", f"{rec_raw:.3f}")
                     seen_ids.add(w['id'])
 
     save_ui_prefs()
