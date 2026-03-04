@@ -240,6 +240,11 @@ def load_icon_image(path):
         stem = os.path.basename(root)
         folder = os.path.dirname(path)
         candidates = []
+        
+        # Manual fix: Base SPAS-12 icon often extracts as invisible. Fall back to custom variant.
+        if stem == "wpn_spas12":
+            candidates.append(os.path.join(folder, f"wpn_spas12_custom{ext}"))
+            
         allow_cw_fallback = not any(stem.startswith(prefix) for prefix in ICON_NO_CW_FALLBACK_PREFIXES)
 
         if allow_cw_fallback and not stem.endswith("_cw"):
