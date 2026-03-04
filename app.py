@@ -809,9 +809,9 @@ with t0:
             locker_df['Icon'] = locker_df['id'].apply(get_icon_path)
             
             display_df = locker_df[['Remove', 'Icon', 'id', 'pretty_name', 'class', 'hit', 'rpm', 'rec', 'mag', 'score']].copy()
-              # show heatmap of scores for quick visual scan if matplotlib is available
-              try:
-                  import matplotlib  # noqa: F401
+            # show heatmap of scores for quick visual scan if matplotlib is available
+            try:
+                import matplotlib  # noqa: F401
                   heat_df = display_df.drop(columns=['Remove','Icon']).copy()
                   heat_df.columns = ['id','pretty_name','class','hit','rpm','rec','mag','score']
                   st.dataframe(heat_df.style.background_gradient(subset=['score'], cmap='viridis'), width='stretch', hide_index=True)
