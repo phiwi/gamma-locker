@@ -184,21 +184,26 @@ def get_caliber_weight(ammo_raw):
     return 1.0
 
 def compute_adjusted_score(row):
+    # revamped formula to better reward "laser" weapons (high rpm + low recoil)
+    # and to factor in handling / horizontal recoil.  This should elevate the
+    # FN‑2000 family, Howa Type‑20, etc. without needing hardcoded bonuses.
     hit = float(row.get('hit', 0))
     rpm = float(row.get('rpm', 0))
     rec = max(float(row.get('rec', 0)), 0.01)
+    rec_hor = float(row.get('rec_hor', rec))
+    handling = float(row.get('handling', 1))
     mag = float(row.get('mag', 0))
-    
-    # LASER WEAPON BONUS: Reduce recoil penalty for low-recoil weapons
-    # This makes high-fire-rate, low-recoil weapons (FN2000, Howa) more competitive
-    # with high-damage snipers.
-    if rec < 0.6:
-        rec_factor = rec * 0.8  # 20% reduction in recoil penalty for lasers
-    else:
-        rec_factor = rec
-        
     adjusted_hit = hit * get_caliber_weight(row.get('ammo', ''))
-    return (adjusted_hit * rpm) / rec_factor + (mag * 0.5)
+
+    # base DPS-like term, weighted more heavily towards vertical recoil but
+    # allowing good horizontal control to shine as well
+    base = (adjusted_hit * rpm) / (rec * 0.75 + rec_hor * 0.25)
+
+    # small handling bonus (for lightweight/ergonomic designs)
+    base *= 1.0 + (handling - 1.0) * 0.1
+
+    # retain magazine size bonus
+    return base + (mag * 0.5)
 
 def get_score_bucket(row):
     cls_raw = str(row.get('class', '')).lower()
@@ -306,11 +311,12 @@ def get_role(r):
         return "Sidearm"
     if slot == 1 and cls_raw == "pistol":
         return "Sidearm"
-    
-    # FORCED POWER: Any weapon using heavy calibers MUST be a Power weapon.
-    if any(cal in ammo for cal in GROUP_HEAVY):
+    # Everything classified as a sniper/DMR should never become a Workhorse slot;
+    # they belong in the Power category regardless of ammunition string. This also
+    # covers oddball shotguns (e.g. Remington 700 "Archangel") whose internal
+    # class is "Sniper/DMR" but whose ammo would otherwise make them workhorses.
+    if "sniper" in cls_raw or "dmr" in cls_raw:
         return "Power"
-        
     if "6.8x51" in ammo or any(a in ammo for a in POWER_AMMO):
         return "Power"
     return "Workhorse"
@@ -391,8 +397,14 @@ def calculate_all_sets(inventory_ids, strategy):
     powers = [w for w in all_w if w['role_label'] == 'Power']
     # Workhorse darf nur Light, MP oder Shotgun sein (Heavy-Kaliber ausgeschlossen)
     def is_valid_workhorse(w):
-        # In the new logic, basically anything that isn't actively drafted as a Power or Sidearm MUST be allowed as a Workhorse
-        # Otherwise the inventory stalls.
+        # Disallow sniper-class guns from ever being considered a workhorse.  They
+        # are already handled above by get_role(), but this extra guard ensures
+        # future tweaks won't accidentally reintroduce a bad pair.
+        cls_raw = str(w.get('class','')).lower()
+        if 'sniper' in cls_raw or 'dmr' in cls_raw:
+            return False
+        # everything else is fine; this function exists mostly for flavor and
+        # to highlight constraints in the orange-tier fallback.
         return True
     workhorses = [w for w in all_w if w['role_label'] == 'Workhorse' and is_valid_workhorse(w)]
 
