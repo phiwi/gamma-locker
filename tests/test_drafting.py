@@ -111,16 +111,16 @@ def test_all_weapons_drafted():
     wh_ids = df[(df['role_label'] == 'Workhorse') & (df.apply(is_valid_wh, axis=1))]['id'].sample(5).tolist()
     
     test_locker = s_ids + p_ids + wh_ids
-    res_sets = calculate_all_sets(test_locker, "Maxxed")
-    
-    used_ids = set()
-    for s_entry in res_sets:
-        for w in s_entry['weapons']:
-            if w:
-                used_ids.add(w['id'])
-                
-    for w_id in test_locker:
-        assert w_id in used_ids, f"Weapon {w_id} was never drafted!"
+    # check both modes; balanced should also eventually touch each item
+    for mode in ("Maxxed", "Balanced"):
+        res_sets = calculate_all_sets(test_locker, mode)
+        used_ids = set()
+        for s_entry in res_sets:
+            for w in s_entry['weapons']:
+                if w:
+                    used_ids.add(w['id'])
+        for w_id in test_locker:
+            assert w_id in used_ids, f"Weapon {w_id} was never drafted in {mode}!"
 
 def test_hybrid_classification():
     """Check if the hybrid classification logic correctly identifies sub-tiers."""
