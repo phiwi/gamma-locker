@@ -43,6 +43,17 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import app
 from app import calculate_all_sets, df
 
+# helper used by multiple tests
+import random
+
+def generate_random_locker(side=5, power=5, work=5, seed=None):
+    if seed is not None:
+        random.seed(seed)
+    s_ids = df[df['role_label'] == 'Sidearm']['id'].sample(side).tolist()
+    p_ids = df[df['role_label'] == 'Power']['id'].sample(power).tolist()
+    wh_ids = df[df['role_label'] == 'Workhorse']['id'].sample(work).tolist()
+    return s_ids + p_ids + wh_ids
+
 def is_light_weapon(w):
     ammo = str(w.get('ammo', '')).lower()
     return any(cal in ammo for cal in app.GROUP_LIGHT)

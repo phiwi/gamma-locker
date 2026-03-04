@@ -381,7 +381,37 @@ def is_valid_pair(w1, w2):
 def is_valid_set(s, p, wh):
     return is_valid_pair(s, p) and is_valid_pair(s, wh) and is_valid_pair(p, wh)
 
+# --- pluggable scoring / role hooks ------------------------------------------------
+# Users may optionally specify custom functions via a JSON config file. The
+# values must be dotted paths to callables, e.g. "my_mod.balance.compute_score".
+import json, importlib
+BALANCE_CFG_PATH = "balance_config.json"
+if os.path.exists(BALANCE_CFG_PATH):
+    try:
+        cfg = json.load(open(BALANCE_CFG_PATH))
+        if 'score_function' in cfg:
+            mod, func = cfg['score_function'].rsplit('.', 1)
+            compute_adjusted_score = getattr(importlib.import_module(mod), func)
+        if 'role_function' in cfg:
+            mod, func = cfg['role_function'].rsplit('.', 1)
+            get_role = getattr(importlib.import_module(mod), func)
+    except Exception as e:
+        st.warning(f"Failed loading balance_config.json: {e}")
+
+# Internal caching to speed up repeated drafts with identical inventory/strategy
+from functools import lru_cache
+
+@lru_cache(maxsize=128)
+def _cached_sets(inventory_tuple, strategy):
+    # convert back to list; perform full calculation here
+    return _raw_calculate_all_sets(list(inventory_tuple), strategy)
+
 def calculate_all_sets(inventory_ids, strategy):
+    return _cached_sets(tuple(inventory_ids), strategy)
+
+# move the previous body into _raw_calculate_all_sets
+
+def _raw_calculate_all_sets(inventory_ids, strategy):
     all_w_df = df[df['id'].isin(inventory_ids)].copy()
     all_w_df['role_label'] = all_w_df.apply(get_role, axis=1)
 
@@ -600,6 +630,13 @@ def calculate_all_sets(inventory_ids, strategy):
 # --- UI SIDEBAR ---
 render_startup_health()
 st.sidebar.title("🎒 Locker Controls")
+# new filtering options
+hide_redundant = st.sidebar.checkbox("Hide redundant weapons", value=False,
+    help="Remove any weapon that has already appeared in an earlier drafted set.")
+role_filter = st.sidebar.multiselect(
+    "Show roles", ["Sidearm","Power","Workhorse"],
+    default=["Sidearm","Power","Workhorse"], help="Limit visible weapons to these roles."
+)
 col_b1, col_b2 = st.sidebar.columns(2)
 if col_b1.button("💾 Save"):
     save_l()
@@ -754,6 +791,12 @@ with t0:
         # Compact table view for locker
         locker_df = df[df['id'].isin(st.session_state.locker)].copy()
         
+        # apply sidebar filters
+        if hide_redundant and st.session_state.get('current_usage'):
+            locker_df = locker_df[locker_df['id'].map(lambda x: st.session_state['current_usage'].get(x,0) == 0)]
+        if role_filter:
+            locker_df = locker_df[locker_df['role_label'].isin(role_filter)]
+        
         if not locker_df.empty:
             locker_df.insert(0, 'Remove', False)
             
@@ -766,6 +809,9 @@ with t0:
             locker_df['Icon'] = locker_df['id'].apply(get_icon_path)
             
             display_df = locker_df[['Remove', 'Icon', 'id', 'pretty_name', 'class', 'hit', 'rpm', 'rec', 'mag', 'score']].copy()
+            # show heatmap of scores for quick visual scan
+            styled = display_df.style.background_gradient(subset=['score'], cmap='viridis')
+            st.dataframe(styled, width='stretch', hide_index=True)
             display_df.columns = ['Remove', 'Icon', 'ID', 'Name', 'Class', 'Damage', 'RPM', 'Recoil', 'Mag Size', 'Score']
             
             display_df['Score'] = display_df['Score'].round(3)
@@ -922,6 +968,13 @@ with t2:
         else:
             st.caption("Balanced label: same P1/P2/R draft model, but set fitness targets balanced totals.")
         res_sets = calculate_all_sets(st.session_state.locker, strat)
+        # cache usage counts for filter and scoring purposes
+        usage = {}
+        for s_entry in res_sets:
+            for w in s_entry['weapons']:
+                if w:
+                    usage[w['id']] = usage.get(w['id'],0) + 1
+        st.session_state['current_usage'] = usage
 
         # Helper for set classification (color badges) and distribution
         def classify_set(active_w, redundant_count):
@@ -930,6 +983,14 @@ with t2:
             if redundant_count == 1:
                 return "🟧", "+1 Redundant"
             return "🟥", "Multi-Redundant"
+
+        # provide a quick export of the generated sets
+        if st.button("📋 Copy sets"):
+            lines = []
+            for idx, s_entry in enumerate(res_sets, start=1):
+                weapons = [w['real_name'] for w in s_entry['weapons'] if w]
+                lines.append(f"Set {idx}: " + ", ".join(weapons))
+            st.text_area("Generated loadout text", value="\n".join(lines), height=200)
 
         # Precompute set-type distribution (depends on display order)
         type_counts = {
