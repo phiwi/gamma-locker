@@ -16,9 +16,13 @@ DATA_DIR = os.path.join(BASE_DIR, "loadout_lab_data")
 def resolve_icon_path(w_id):
     import os
     p = os.path.abspath(os.path.join(DATA_DIR, "icons", f"{w_id}.png"))
-    # Manual fix: Base SPAS-12 icon often extracts as invisible heavily cropped. Fall back to custom variant.
-    if w_id == "wpn_spas12":
-        p = os.path.abspath(os.path.join(DATA_DIR, "icons", "wpn_spas12_custom.png"))
+    
+    # Manual fix: Some SPAS-12 variant grid coordinates map to zero-alpha cropped space. Fall back to _cw. 
+    if w_id in ["wpn_spas12", "wpn_spas12_custom", "wpn_spas12_nimble"]:
+        cw_path = os.path.abspath(os.path.join(DATA_DIR, "icons", "wpn_spas12_cw.png"))
+        if os.path.exists(cw_path):
+            p = cw_path
+
     return p if os.path.exists(p) else None
 
 

@@ -359,8 +359,14 @@ for _, r in tqdm.tqdm(df_final.iterrows(), total=len(df_final)):
         cell_size = 50
         x = int(r['gx'] * cell_size)
         y = int(r['gy'] * cell_size)
+        
+        # FIX: Some mods override the atlas texture with a small standalone sprite but forget to zero the original grid coords
+        if x >= img.width or y >= img.height:
+            x, y = 0, 0
+            
         w = int(r['gw'] * cell_size)
         h = int(r['gh'] * cell_size)
+
         try:
             icon = img.crop((x, y, x + w, y + h))
             icon.save(target_icon)
