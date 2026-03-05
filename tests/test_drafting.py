@@ -13,6 +13,8 @@ def mock_columns(n):
     return [MagicMock() for _ in range(n)]
 
 mock_st.sidebar.columns.side_effect = mock_columns
+mock_st.sidebar.button.return_value = False
+mock_st.button.return_value = False
 mock_st.columns.side_effect = mock_columns
 mock_st.tabs.side_effect = mock_columns
 mock_st.select_slider.return_value = 30
@@ -39,6 +41,61 @@ sys.modules['streamlit'] = mock_st
 
 # Add the project root to sys.path so we can import app
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+
+import io
+
+_MOCK_CSV = """id,real_name,hit,rpm,slot,acc,rec,rec_inc,rec_hor,mag,handling,ammo,mod,class,gx,gy,gw,gh,tex
+wpn_pm,Makarov PM,0.45,315.0,1,0.62,2.0,0.1,0.52,8,1.0,9x18_fmj,Vanilla,Pistol,0,0,2,1,ui_icon
+wpn_glock,Glock 17,0.5,300.0,1,0.6,1.8,0.1,0.5,17,1.0,9x19_fmj,Vanilla,Pistol,0,0,2,1,ui_icon
+wpn_beretta,Beretta,0.5,300.0,1,0.6,1.8,0.1,0.5,15,1.0,9x19_fmj,Vanilla,Pistol,0,0,2,1,ui_icon
+wpn_mp5k,MP5K,0.5,900.0,2,0.5,1.5,0.1,0.4,30,1.0,9x19_fmj,Vanilla,SMG,0,0,3,2,ui_icon
+wpn_p90,P90,0.5,900.0,2,0.6,1.2,0.1,0.3,50,1.0,5.7x28_ss190,Vanilla,SMG,0,0,3,2,ui_icon
+wpn_sr2_veresk,SR-2,0.6,900.0,2,0.5,1.8,0.1,0.5,30,1.0,9x21_sp10,Vanilla,SMG,0,0,3,2,ui_icon
+wpn_colt,Colt 1911,0.6,300.0,1,0.6,2.2,0.1,0.6,7,1.0,.45_acp,Vanilla,Pistol,0,0,2,1,ui_icon
+
+wpn_ak74,AK-74,0.6,600.0,2,0.5,1.5,0.1,0.4,30,1.0,5.45x39_fmj,Vanilla,Assault Rifle,0,0,5,2,ui_icon
+wpn_m4a1,M4A1,0.6,800.0,2,0.6,1.4,0.1,0.3,30,1.0,5.56x45_fmj,Vanilla,Assault Rifle,0,0,5,2,ui_icon
+wpn_akm,AKM,0.7,600.0,2,0.5,1.8,0.1,0.5,30,1.0,7.62x39_fmj,Vanilla,Assault Rifle,0,0,5,2,ui_icon
+wpn_groza,Groza,0.8,700.0,2,0.5,1.6,0.1,0.4,20,1.0,9x39_pab9,Vanilla,Assault Rifle,0,0,4,2,ui_icon
+wpn_l85,L85,0.6,650.0,2,0.6,1.3,0.1,0.3,30,1.0,5.56x45_fmj,Vanilla,Assault Rifle,0,0,5,2,ui_icon
+wpn_g36,G36,0.6,750.0,2,0.6,1.3,0.1,0.3,30,1.0,5.56x45_fmj,Vanilla,Assault Rifle,0,0,5,2,ui_icon
+wpn_ak105,AK-105,0.6,600.0,2,0.5,1.6,0.1,0.4,30,1.0,5.45x39_fmj,Vanilla,Assault Rifle,0,0,4,2,ui_icon
+wpn_fn2000,FN F2000,0.6,850.0,2,0.6,1.2,0.1,0.3,30,1.0,5.56x45_fmj,Vanilla,Assault Rifle,0,0,5,2,ui_icon
+
+wpn_mp5,MP5,0.5,800.0,2,0.5,1.4,0.1,0.3,30,1.0,9x19_fmj,Vanilla,SMG,0,0,4,2,ui_icon
+wpn_spas12,SPAS-12,1.2,200.0,2,0.4,3.0,0.2,1.0,8,1.0,12x70_buck,Vanilla,Shotgun,0,0,5,2,ui_icon
+wpn_mp7,MP7,0.5,950.0,2,0.6,1.1,0.1,0.2,40,1.0,4.6x30_fmj,Vanilla,SMG,0,0,3,2,ui_icon
+wpn_toz34,TOZ-34,1.5,100.0,2,0.5,4.0,0.3,1.5,2,1.0,12x70_buck,Vanilla,Shotgun,0,0,6,1,ui_icon
+wpn_mp133,MP-133,1.2,150.0,2,0.4,3.0,0.2,1.0,6,1.0,12x70_buck,Vanilla,Shotgun,0,0,5,2,ui_icon
+wpn_ump45,UMP-45,0.6,600.0,2,0.5,1.6,0.1,0.4,25,1.0,.45_acp,Vanilla,SMG,0,0,4,2,ui_icon
+
+wpn_svd,SVD,1.0,150.0,2,0.8,2.5,0.2,0.8,10,1.0,7.62x54_7h1,Vanilla,Sniper,0,0,6,2,ui_icon
+wpn_m110,M110,0.9,300.0,2,0.8,2.2,0.2,0.7,20,1.0,7.62x51_fmj,Vanilla,DMR,0,0,6,2,ui_icon
+wpn_ash12,ASh-12,1.2,600.0,2,0.6,2.8,0.2,0.9,20,1.0,12.7x55_fmj,Vanilla,Assault Rifle,0,0,5,2,ui_icon
+wpn_lapua,Lapua,1.8,50.0,2,0.9,4.0,0.3,1.5,5,1.0,.338_magnum,Vanilla,Sniper,0,0,6,2,ui_icon
+wpn_sig_spear,Spear,0.8,650.0,2,0.7,1.8,0.1,0.5,20,1.0,6.8x51_hybrid,Vanilla,Assault Rifle,0,0,5,2,ui_icon
+wpn_ks23,KS-23,2.0,100.0,2,0.3,5.0,0.4,2.0,3,1.0,23x75_shrapnel,Vanilla,Shotgun,0,0,5,2,ui_icon
+wpn_saiga,Saiga,1.1,400.0,2,0.4,2.5,0.2,0.8,8,1.0,12x76_bull,Vanilla,Shotgun,0,0,5,2,ui_icon
+wpn_mosin,Mosin,1.1,60.0,2,0.8,3.0,0.2,1.0,5,1.0,7.62x54_7h1,Vanilla,Sniper,0,0,6,1,ui_icon
+wpn_pkm,PKM,0.9,650.0,2,0.5,2.5,0.2,0.8,100,1.0,7.62x54_7h1,Vanilla,Machine Gun,0,0,6,2,ui_icon
+"""
+
+original_read_csv = pd.read_csv
+def mock_read_csv(filepath_or_buffer, *args, **kwargs):
+    if isinstance(filepath_or_buffer, str) and "weapons_stats.csv" in filepath_or_buffer:
+        return original_read_csv(io.StringIO(_MOCK_CSV), *args, **kwargs)
+    return original_read_csv(filepath_or_buffer, *args, **kwargs)
+
+import builtins
+original_exists = os.path.exists
+def mock_exists(path):
+    if isinstance(path, str) and "weapons_stats.csv" in path:
+        return True
+    return original_exists(path)
+
+os.path.exists = mock_exists
+pd.read_csv = mock_read_csv
 
 import app
 from app import calculate_all_sets, df
@@ -183,7 +240,6 @@ def test_workhorse_restrictions():
             has_heavy_ammo = "6.8x51" in ammo or any(a in ammo for a in app.POWER_AMMO)
             assert not has_heavy_ammo, \
                 f"Weapon {row['id']} is Workhorse but has heavy ammo ({ammo})"
-
 
 def test_sidearm_prefixes_are_sidearms():
     """Verify that weapons with SIDEARM_SMG_PREFIXES always get classified as Sidearm."""
