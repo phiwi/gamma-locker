@@ -30,6 +30,12 @@ for t_path in TEXT_PATHS:
     for root, dirs, files in os.walk(t_path):
         rel = Path(root).relative_to(t_path)
         rel_parts = [p.lower() for p in rel.parts]
+        if 'text' in rel_parts and 'eng' not in rel_parts:
+            # We enforce English if sibling languages exist.
+            continue
+        if 'text' in rel_parts and 'eng' not in rel_parts:
+            # We enforce English if sibling languages exist.
+            continue
         
         # PRIORITY: Only keep 'eng' (English).
         # Ignore everything in language folders that are not 'eng'.
@@ -144,6 +150,8 @@ all_files = []
 for scan_path in SCAN_PATHS:
     if not scan_path.exists(): continue
     for root, dirs, files in os.walk(scan_path):
+        dirs[:] = [d for d in dirs if d.lower() not in ('.git', '.svn')]
+        dirs[:] = [d for d in dirs if d.lower() not in ('.git', '.svn')]
         for f in files:
             if f.endswith(".ltx"):
                 all_files.append((root, f))

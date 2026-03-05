@@ -55,4 +55,38 @@ def get_path_list(key: str) -> list[Path]:
     values = cfg.get(key, [])
     if not isinstance(values, list):
         return []
-    return [Path(str(item)) for item in values]
+    
+    result = []
+    for item in values:
+        p = Path(str(item))
+        if p.name == "mods" and p.parent.name == "MO2":
+            profiles_dir = p.parent / "profiles"
+            best_modlist = None
+            if profiles_dir.exists():
+                modlists = [ml for prof in profiles_dir.iterdir() if (ml := prof / "modlist.txt").exists() and ml.is_file()]
+                if modlists:
+                    best_modlist = max(modlists, key=lambda x: x.stat().st_mtime)
+            if best_modlist:
+                try:
+                    lines = best_modlist.read_text(encoding='utf-8', errors='ignore').splitlines()
+                    for line in reversed(lines):
+                        if line.startswith('+'):
+                            mod_path = p / line[1:].strip()
+                            if mod_path.exists():
+                                append_p = mod_path
+                                if key == "text_paths":
+                                    append_p = mod_path / "gamedata/configs/text/eng"
+                                    if not append_p.exists():
+                                        append_p = mod_path / "gamedata/configs/text"
+                                elif key == "scan_paths":
+                                    append_p = mod_path / "gamedata/configs"
+                                elif key == "texture_paths":
+                                    append_p = mod_path / "gamedata/textures"
+                                
+                                if append_p.exists():
+                                    result.append(append_p)
+                    continue
+                except Exception:
+                    pass
+        result.append(p)
+    return result

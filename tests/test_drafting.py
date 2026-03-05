@@ -258,3 +258,16 @@ def test_sidearm_prefixes_are_sidearms():
 app.save_l = lambda: None
 app.backup_locker = lambda: None
 app.save_ui_prefs = lambda: None
+
+def test_mutant_killer_constraint():
+    """
+    Test that every drafted set contains at least one mutant killer weapon.
+    (Mutant killer = shotgun or ammo 5.45, 5.56, .45, 9x19)
+    """
+    test_locker = generate_random_locker(3, 3, 3, seed=42)
+    res_sets = calculate_all_sets(test_locker, "Balanced")
+    
+    for s_entry in res_sets:
+        w_list = [w for w in s_entry['weapons'] if w]
+        has_mk = any(w.get('mutant_killer', False) for w in w_list)
+        assert has_mk, f"Set drafted without a mutant killer! {s_entry}"

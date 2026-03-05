@@ -367,8 +367,21 @@ def load_data():
     df = df[~(melee_mask | name_mask | id_mask)].reset_index(drop=True)
     df['pretty_name'] = df.get('real_name', df['id'])
     df['ammo_display'] = df['ammo'].apply(prettify_ammo)
-    if 'mutant_killer' not in df.columns:
-        df['mutant_killer'] = False
+    
+    # 🐗 Mutant Killer logic: any of these ammo types or any shotgun
+    mutant_calibers = ['5.45', '5.56', '.45', '9x19']
+    
+    def is_mutant_killer(row):
+        ammo_str = str(row.get('ammo', '')).lower()
+        cls_str = str(row.get('class', '')).lower()
+        if 'shotgun' in cls_str:
+            return True
+        for cal in mutant_calibers:
+            if cal in ammo_str:
+                return True
+        return False
+
+    df['mutant_killer'] = df.apply(is_mutant_killer, axis=1)
     df['raw_score'] = df.apply(compute_score, axis=1)
     df['raw_adjusted'] = df.apply(compute_adjusted_score, axis=1)
     df['recoil_rating'] = (1.0 - df['rec'].rank(method='average', pct=True).fillna(0.5)) * 100.0
@@ -415,6 +428,9 @@ def is_valid_pair(w1, w2):
     return not is_ammo_conflict(w1, w2)
 
 def is_valid_set(s, p, wh):
+    has_mutant_killer = s.get('mutant_killer') or p.get('mutant_killer') or wh.get('mutant_killer')
+    if not has_mutant_killer:
+        return False
     return is_valid_pair(s, p) and is_valid_pair(s, wh) and is_valid_pair(p, wh)
 
 # --- pluggable scoring / role hooks ------------------------------------------------
