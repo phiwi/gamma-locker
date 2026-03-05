@@ -12,8 +12,8 @@ from paths_config import get_path
 # --- CONFIG & PATHS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "loadout_lab_data")
-LOCKER_FILE = os.path.join(DATA_DIR, "my_locker.json")
-BACKUP_FILE = os.path.join(DATA_DIR, "my_locker_backup.json")
+LOCKER_FILE = os.path.join(DATA_DIR, "test_locker.json") if os.environ.get("TESTING_ENV") else os.path.join(DATA_DIR, "my_locker.json")
+BACKUP_FILE = os.path.join(DATA_DIR, "test_locker_backup.json") if os.environ.get("TESTING_ENV") else os.path.join(DATA_DIR, "my_locker_backup.json")
 UI_PREFS_FILE = os.path.join(DATA_DIR, "ui_prefs.json")
 SAVE_DIR = "/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/appdata/savedgames/"
 SAVE_DIR = str(get_path("save_dir", SAVE_DIR))

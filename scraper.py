@@ -361,16 +361,33 @@ for _, r in tqdm.tqdm(df_final.iterrows(), total=len(df_final)):
         y = int(r['gy'] * cell_size)
         
         # FIX: Some mods override the atlas texture with a small standalone sprite but forget to zero the original grid coords
-if x >= img.width or y >= img.height:
+        if x >= img.width or y >= img.height:
             # Standalone texture fallback - Mod changed texture to a dedicated file but left old grid coords.
             # Crop it perfectly to its valid alpha bounding box.
             bbox = img.getbbox()
+            w = int(r['gw'] * cell_size)
+            h = int(r['gh'] * cell_size)
+            
             if bbox:
-                icon = img.crop(bbox)
+                # SPECIAL FIX: Firebreath SPAS-12 texture has two models one above another.
+                if 'spas12' in r['id'] and bbox[3] > img.height * 0.4:
+                    icon = img.crop((0, 0, img.width, img.height // 2))
+                    bbox2 = icon.getbbox()
+                    if bbox2:
+                        icon = icon.crop(bbox2)
+                else:
+                    icon = img.crop(bbox)
+                
+                # Fit the extracted icon into the expected game-grid boundaries (w, h) so it isn't cropped by UI
+                if icon.width > w or icon.height > h:
+                    icon.thumbnail((w, h), Image.Resampling.LANCZOS)
+                
+                bg = Image.new('RGBA', (w, h), (0,0,0,0))
+                bg.paste(icon, ((w - icon.width) // 2, (h - icon.height) // 2))
+                icon = bg
             else:
                 icon = img.crop((0, 0, w, h))
             
-            # optionally verify/resize? Streamlit will scale it, so just saving raw bbox is fine.
             icon.save(target_icon)
             continue
 
