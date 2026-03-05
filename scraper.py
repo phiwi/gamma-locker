@@ -369,18 +369,32 @@ for _, r in tqdm.tqdm(df_final.iterrows(), total=len(df_final)):
             h = int(r['gh'] * cell_size)
             
             if bbox:
+                icon_cropped = False
                 # SPECIAL FIX: Firebreath SPAS-12 texture has two models one above another.
                 if 'spas12' in r['id'] and bbox[3] > img.height * 0.4:
                     icon = img.crop((0, 0, img.width, img.height // 2))
                     bbox2 = icon.getbbox()
                     if bbox2:
                         icon = icon.crop(bbox2)
-                else:
+                    icon_cropped = True
+                # SPECIAL FIX: MP7 has two models side-by-side
+                elif 'mp7' in r['id'] and (bbox[2] - bbox[0]) > 200:
+                    icon = img.crop((bbox[0], bbox[1], bbox[0] + (bbox[2] - bbox[0]) // 2, bbox[3]))
+                    bbox2 = icon.getbbox()
+                    if bbox2:
+                        icon = icon.crop(bbox2)
+                    icon_cropped = True
+                
+                if not icon_cropped:
                     icon = img.crop(bbox)
                 
                 # Fit the extracted icon into the expected game-grid boundaries (w, h) so it isn't cropped by UI
                 if icon.width > w or icon.height > h:
                     icon.thumbnail((w, h), Image.Resampling.LANCZOS)
+                elif icon.width < w * 0.5 and icon.height < h * 0.5:
+                    # Upscale if it's very small
+                    scale = min(w / icon.width, h / icon.height)
+                    icon = icon.resize((int(icon.width * scale), int(icon.height * scale)), Image.Resampling.LANCZOS)
                 
                 bg = Image.new('RGBA', (w, h), (0,0,0,0))
                 bg.paste(icon, ((w - icon.width) // 2, (h - icon.height) // 2))
