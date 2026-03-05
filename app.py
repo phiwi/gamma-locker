@@ -12,27 +12,8 @@ from paths_config import get_path
 # --- CONFIG & PATHS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "loadout_lab_data")
-
-def resolve_icon_path(w_id):
-    import os
-    p = os.path.abspath(os.path.join(DATA_DIR, "icons", f"{w_id}.png"))
-    
-    # Manual fix: Some SPAS-12 variant grid coordinates map to zero-alpha cropped space. Fall back to _cw. 
-    if w_id in ["wpn_spas12", "wpn_spas12_custom", "wpn_spas12_nimble"]:
-        cw_path = os.path.abspath(os.path.join(DATA_DIR, "icons", "wpn_spas12_cw.png"))
-        if os.path.exists(cw_path):
-            p = cw_path
-
-    return p if os.path.exists(p) else None
-
-
-
-
-
-
-
-LOCKER_FILE = os.path.join(DATA_DIR, "test_locker.json") if os.environ.get("TESTING_ENV") else os.path.join(DATA_DIR, "my_locker.json") if not os.environ.get('TESTING_ENV') else os.path.join(DATA_DIR, "test_locker.json")
-BACKUP_FILE = os.path.join(DATA_DIR, "test_locker_backup.json") if os.environ.get("TESTING_ENV") else os.path.join(DATA_DIR, "my_locker_backup.json")
+LOCKER_FILE = os.path.join(DATA_DIR, "my_locker.json")
+BACKUP_FILE = os.path.join(DATA_DIR, "my_locker_backup.json")
 UI_PREFS_FILE = os.path.join(DATA_DIR, "ui_prefs.json")
 SAVE_DIR = "/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/appdata/savedgames/"
 SAVE_DIR = str(get_path("save_dir", SAVE_DIR))
@@ -50,6 +31,8 @@ SIDEARM_SMG_PREFIXES = (
     "wpn_p90",
     "wpn_ps90",
     "wpn_eft_p90",
+    "wpn_mp7",
+    "wpn_eft_mp7",
 )
 ICON_NO_CW_FALLBACK_PREFIXES = (
     "wpn_spas12",
@@ -87,18 +70,6 @@ def load_locker():
     return []
 
 def save_l():
-    import sys
-    if "pytest" in sys.modules:
-        import traceback
-        print("SAVE SPY CAUGHT")
-        traceback.print_stack()
-        return
-    import sys
-    if "pytest" in sys.modules:
-        import traceback
-        print("SAVE SPY CAUGHT")
-        traceback.print_stack()
-        return
     with open(LOCKER_FILE, "w", encoding="utf-8") as f:
         json.dump(st.session_state.locker, f, indent=2)
 
@@ -297,8 +268,6 @@ def compute_class_normalized_scores(df_local):
     return ranked * 100.0
 
 def load_icon_image(path):
-    if not path:
-        return None
     def open_visible_rgba(p):
         if not os.path.exists(p):
             return None
@@ -706,16 +675,11 @@ role_filter = st.sidebar.multiselect(
     "Show roles", ["Sidearm","Power","Workhorse"],
     default=["Sidearm","Power","Workhorse"], help="Limit visible weapons to these roles."
 )
-st.sidebar.caption("Changes save instantly.")
 col_b1, col_b2 = st.sidebar.columns(2)
-if col_b1.button("📸 Backup"):
-    backup_locker()
-
+if col_b1.button("💾 Save"):
     save_l()
-    st.sidebar.success("Backup Snapshot taken!")
+    st.sidebar.success("Saved")
 if col_b2.button("🗑️ Clear"):
-    backup_locker()
-
     st.session_state.locker = []
     save_l()
     st.rerun()
@@ -915,7 +879,9 @@ with t0:
             
             # Icons for ImageColumn
             def get_icon_path(w_id):
-                return resolve_icon_path(w_id)
+                # Absolute path is often needed for ImageColumn
+                p = os.path.abspath(f"loadout_lab_data/icons/{w_id}.png")
+                return p if os.path.exists(p) else None
 
             locker_df['Icon'] = locker_df['id'].apply(get_icon_path)
             
@@ -1018,7 +984,7 @@ with t1:
             # Show top-N detailed rows with add/remove buttons
             for _, r in render_hits.iterrows():
                 c_img, c_txt, c_btn = st.columns([1, 4, 1])
-                img_path = resolve_icon_path(r['id'])
+                img_path = f"loadout_lab_data/icons/{r['id']}.png"
                 img = load_icon_image(img_path)
                 if img is not None:
                     c_img.image(img, width=80)
@@ -1289,7 +1255,7 @@ with t2:
                     if w is None:
                         continue
                     with cols[i]:
-                        img_path = resolve_icon_path(w['id'])
+                        img_path = f"loadout_lab_data/icons/{w['id']}.png"
                         img = load_icon_image(img_path)
                         if img is not None:
                             st.image(img, width='content')
