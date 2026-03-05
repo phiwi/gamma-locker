@@ -10,7 +10,8 @@ from save_reader import get_savegames, extract_weapons_from_scop
 from paths_config import get_path
 
 # --- CONFIG & PATHS ---
-DATA_DIR = "loadout_lab_data"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "loadout_lab_data")
 LOCKER_FILE = os.path.join(DATA_DIR, "my_locker.json")
 BACKUP_FILE = os.path.join(DATA_DIR, "my_locker_backup.json")
 UI_PREFS_FILE = os.path.join(DATA_DIR, "ui_prefs.json")
@@ -877,7 +878,7 @@ with t0:
             # Icons for ImageColumn
             def get_icon_path(w_id):
                 # Absolute path is often needed for ImageColumn
-                p = os.path.abspath(f"loadout_lab_data/icons/{w_id}.png")
+                p = os.path.abspath(os.path.join(DATA_DIR, "icons", f"{w_id}.png"))
                 return p if os.path.exists(p) else None
 
             locker_df['Icon'] = locker_df['id'].apply(get_icon_path)
@@ -981,7 +982,7 @@ with t1:
             # Show top-N detailed rows with add/remove buttons
             for _, r in render_hits.iterrows():
                 c_img, c_txt, c_btn = st.columns([1, 4, 1])
-                img_path = f"loadout_lab_data/icons/{r['id']}.png"
+                img_path = os.path.join(DATA_DIR, "icons", f"{r['id']}.png")
                 img = load_icon_image(img_path)
                 if img is not None:
                     c_img.image(img, width=80)
@@ -1252,7 +1253,7 @@ with t2:
                     if w is None:
                         continue
                     with cols[i]:
-                        img_path = f"loadout_lab_data/icons/{w['id']}.png"
+                        img_path = os.path.join(DATA_DIR, "icons", f"{w['id']}.png")
                         img = load_icon_image(img_path)
                         if img is not None:
                             st.image(img, width='content')

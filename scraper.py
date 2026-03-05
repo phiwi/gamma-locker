@@ -6,7 +6,7 @@ from paths_config import get_path_list
 SCAN_PATHS = get_path_list("scan_paths")
 TEXT_PATHS = get_path_list("text_paths")
 TEXTURE_PATHS = get_path_list("texture_paths")
-OUT_DIR = Path("./loadout_lab_data")
+OUT_DIR = Path(__file__).parent / "loadout_lab_data"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # --- TRANSLATION LOADING ---
