@@ -12,6 +12,21 @@ from paths_config import get_path
 # --- CONFIG & PATHS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "loadout_lab_data")
+
+def resolve_icon_path(w_id):
+    import os
+    p = os.path.abspath(os.path.join(DATA_DIR, "icons", f"{w_id}.png"))
+    # Manual fix: Base SPAS-12 icon often extracts as invisible heavily cropped. Fall back to custom variant.
+    if w_id == "wpn_spas12":
+        p = os.path.abspath(os.path.join(DATA_DIR, "icons", "wpn_spas12_custom.png"))
+    return p if os.path.exists(p) else None
+
+
+
+
+
+
+
 LOCKER_FILE = os.path.join(DATA_DIR, "test_locker.json") if os.environ.get("TESTING_ENV") else os.path.join(DATA_DIR, "my_locker.json") if not os.environ.get('TESTING_ENV') else os.path.join(DATA_DIR, "test_locker.json")
 BACKUP_FILE = os.path.join(DATA_DIR, "test_locker_backup.json") if os.environ.get("TESTING_ENV") else os.path.join(DATA_DIR, "my_locker_backup.json")
 UI_PREFS_FILE = os.path.join(DATA_DIR, "ui_prefs.json")
@@ -278,6 +293,8 @@ def compute_class_normalized_scores(df_local):
     return ranked * 100.0
 
 def load_icon_image(path):
+    if not path:
+        return None
     def open_visible_rgba(p):
         if not os.path.exists(p):
             return None
@@ -894,9 +911,7 @@ with t0:
             
             # Icons for ImageColumn
             def get_icon_path(w_id):
-                # Absolute path is often needed for ImageColumn
-                p = os.path.abspath(os.path.join(DATA_DIR, "icons", f"{w_id}.png"))
-                return p if os.path.exists(p) else None
+                return resolve_icon_path(w_id)
 
             locker_df['Icon'] = locker_df['id'].apply(get_icon_path)
             
@@ -999,7 +1014,7 @@ with t1:
             # Show top-N detailed rows with add/remove buttons
             for _, r in render_hits.iterrows():
                 c_img, c_txt, c_btn = st.columns([1, 4, 1])
-                img_path = os.path.join(DATA_DIR, "icons", f"{r['id']}.png")
+                img_path = resolve_icon_path(r['id'])
                 img = load_icon_image(img_path)
                 if img is not None:
                     c_img.image(img, width=80)
@@ -1270,7 +1285,7 @@ with t2:
                     if w is None:
                         continue
                     with cols[i]:
-                        img_path = os.path.join(DATA_DIR, "icons", f"{w['id']}.png")
+                        img_path = resolve_icon_path(w['id'])
                         img = load_icon_image(img_path)
                         if img is not None:
                             st.image(img, width='content')
