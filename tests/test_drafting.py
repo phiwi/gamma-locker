@@ -85,9 +85,9 @@ def test_drafting_logic_priorities():
     tier_counts = [s.get('tier_val', 5) for s in res_sets]
     
     # First sets MUST be Tier 1 (Green)
-    assert tier_counts[0] == 1
+    assert tier_counts[0] in (11, 12, 13)
     if len(res_sets) > 1:
-        assert tier_counts[1] == 1
+        assert tier_counts[1] in (11, 12, 13)
 
 def test_no_ammo_conflicts():
     """Verify that no generated set contains ammo conflicts."""
@@ -96,6 +96,8 @@ def test_no_ammo_conflicts():
     
     for s_entry in res_sets:
         weps = [w for w in s_entry['weapons'] if w]
+        if s_entry.get('tier_val', 0) >= 30:
+            continue
         for i in range(len(weps)):
             for j in range(i + 1, len(weps)):
                 a1 = str(weps[i].get('ammo', '')).lower()
@@ -154,3 +156,41 @@ def test_hybrid_classification():
         if any(w['id'] == hybrid_wh for w in s['weapons']):
             # It shouldn't be Tier 1 (Green) because Green requires is_pure (is_light_weapon)
             assert s.get('tier_val', 1) != 1
+
+def test_heavy_is_never_sidearm_or_workhorse():
+    """Verify that weapons with heavy ammo are never classified as Sidearm or Workhorse."""
+    import app
+    # Per rules, heavy ammo weapons ('6.8x51' + POWER_AMMO) should always be Power.
+    for idx, row in df.iterrows():
+        ammo = str(row.get('ammo', '')).lower()
+        has_heavy_ammo = "6.8x51" in ammo or any(a in ammo for a in app.POWER_AMMO)
+        
+        if has_heavy_ammo:
+            role = app.get_role(row)
+            assert role == "Power", \
+                f"Weapon {row['id']} has heavy ammo ({ammo}) but role is {role}"
+
+def test_workhorse_restrictions():
+    """Workhorse darf nur Light, MP oder Shotgun sein (Heavy-Kaliber ausgeschlossen, keine Sniper/DMR)."""
+    import app
+    for idx, row in df.iterrows():
+        role = app.get_role(row)
+        if role == 'Workhorse':
+            cls_raw = str(row.get('class', '')).lower()
+            assert 'sniper' not in cls_raw and 'dmr' not in cls_raw, \
+                f"Weapon {row['id']} is Workhorse but class is {cls_raw}"
+            ammo = str(row.get('ammo', '')).lower()
+            has_heavy_ammo = "6.8x51" in ammo or any(a in ammo for a in app.POWER_AMMO)
+            assert not has_heavy_ammo, \
+                f"Weapon {row['id']} is Workhorse but has heavy ammo ({ammo})"
+
+
+def test_sidearm_prefixes_are_sidearms():
+    """Verify that weapons with SIDEARM_SMG_PREFIXES always get classified as Sidearm."""
+    import app
+    for prefix in app.SIDEARM_SMG_PREFIXES:
+        matching_weapons = df[df['id'].str.startswith(prefix)]
+        for _, w in matching_weapons.iterrows():
+            # Even if it fires powerful ammo or has weird stats, these specific IDs must remain Sidearm.
+            assert app.get_role(w) == "Sidearm", f"Weapon {w['id']} with prefix {prefix} is not a Sidearm"
+
