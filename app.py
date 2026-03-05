@@ -12,8 +12,8 @@ from paths_config import get_path
 # --- CONFIG & PATHS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "loadout_lab_data")
-LOCKER_FILE = os.path.join(DATA_DIR, "my_locker.json")
-BACKUP_FILE = os.path.join(DATA_DIR, "my_locker_backup.json")
+LOCKER_FILE = os.path.join(DATA_DIR, "test_locker.json") if os.environ.get("TESTING_ENV") else os.path.join(DATA_DIR, "my_locker.json") if not os.environ.get('TESTING_ENV') else os.path.join(DATA_DIR, "test_locker.json")
+BACKUP_FILE = os.path.join(DATA_DIR, "test_locker_backup.json") if os.environ.get("TESTING_ENV") else os.path.join(DATA_DIR, "my_locker_backup.json")
 UI_PREFS_FILE = os.path.join(DATA_DIR, "ui_prefs.json")
 SAVE_DIR = "/mnt/c/G.A.M.M.A/Anomaly-1.5.3-Full.2/appdata/savedgames/"
 SAVE_DIR = str(get_path("save_dir", SAVE_DIR))
@@ -68,6 +68,18 @@ def load_locker():
     return []
 
 def save_l():
+    import sys
+    if "pytest" in sys.modules:
+        import traceback
+        print("SAVE SPY CAUGHT")
+        traceback.print_stack()
+        return
+    import sys
+    if "pytest" in sys.modules:
+        import traceback
+        print("SAVE SPY CAUGHT")
+        traceback.print_stack()
+        return
     with open(LOCKER_FILE, "w", encoding="utf-8") as f:
         json.dump(st.session_state.locker, f, indent=2)
 
@@ -675,6 +687,8 @@ role_filter = st.sidebar.multiselect(
 )
 col_b1, col_b2 = st.sidebar.columns(2)
 if col_b1.button("💾 Save"):
+    backup_locker()
+
     save_l()
     st.sidebar.success("Saved")
 if col_b2.button("🗑️ Clear"):

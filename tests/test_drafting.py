@@ -1,3 +1,6 @@
+import os
+os.environ["TESTING_ENV"] = "1"
+
 import pandas as pd
 import pytest
 import os
