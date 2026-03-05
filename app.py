@@ -685,13 +685,16 @@ role_filter = st.sidebar.multiselect(
     "Show roles", ["Sidearm","Power","Workhorse"],
     default=["Sidearm","Power","Workhorse"], help="Limit visible weapons to these roles."
 )
+st.sidebar.caption("Changes save instantly.")
 col_b1, col_b2 = st.sidebar.columns(2)
-if col_b1.button("💾 Save"):
+if col_b1.button("📸 Backup"):
     backup_locker()
 
     save_l()
-    st.sidebar.success("Saved")
+    st.sidebar.success("Backup Snapshot taken!")
 if col_b2.button("🗑️ Clear"):
+    backup_locker()
+
     st.session_state.locker = []
     save_l()
     st.rerun()
