@@ -72,15 +72,36 @@ def save_l():
 
 def backup_locker():
     if st.session_state.get('locker'):
-        with open(BACKUP_FILE, "w", encoding="utf-8") as f:
+        import shutil
+        # Migrate old single backup if it exists
+        if os.path.exists(BACKUP_FILE) and not os.path.exists(BACKUP_FILE.replace(".json", "_1.json")):
+            shutil.move(BACKUP_FILE, BACKUP_FILE.replace(".json", "_1.json"))
+            
+        # Rotate backups 2 -> 3, 1 -> 2
+        for i in range(2, 0, -1):
+            src = BACKUP_FILE.replace('.json', f'_{i}.json')
+            dst = BACKUP_FILE.replace('.json', f'_{i+1}.json')
+            if os.path.exists(src):
+                shutil.copy(src, dst)
+                
+        # Save new as _1
+        with open(BACKUP_FILE.replace('.json', '_1.json'), "w", encoding="utf-8") as f:
             json.dump(st.session_state.locker, f, indent=2)
 
-def restore_backup():
-    if os.path.exists(BACKUP_FILE):
-        with open(BACKUP_FILE, "r", encoding="utf-8") as f:
-            st.session_state.locker = json.load(f)
-        save_l()
-        return True
+def restore_backup(index=1):
+    # Fallback to old name if index 1 doesn't exist but old one does
+    b_file = BACKUP_FILE.replace('.json', f'_{index}.json')
+    if index == 1 and not os.path.exists(b_file) and os.path.exists(BACKUP_FILE):
+        b_file = BACKUP_FILE
+        
+    if os.path.exists(b_file):
+        try:
+            with open(b_file, "r", encoding="utf-8") as f:
+                st.session_state.locker = json.load(f)
+            save_l()
+            return True
+        except Exception:
+            pass
     return False
 
 def load_ui_prefs():
@@ -662,12 +683,51 @@ if col_b2.button("🗑️ Clear"):
 
 # Hidden backup restore controls
 with st.sidebar.expander("🛠️ Advanced"):
-    if st.button("⏪ Restore latest backup"):
-        if restore_backup():
-            st.success("Backup restored!")
-            st.rerun()
-        else:
-            st.error("No backup found.")
+    for i in range(1, 4):
+        # Support fallback logic display
+        b_path = BACKUP_FILE.replace('.json', f'_{i}.json')
+        if i == 1 and not os.path.exists(b_path) and os.path.exists(BACKUP_FILE):
+            b_path = BACKUP_FILE
+            
+        if os.path.exists(b_path):
+            # Read modified time for better UX
+            mtime = os.path.getmtime(b_path)
+            import datetime
+            dt_str = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+            if st.button(f"⏪ Restore Backup {i} ({dt_str})", key=f"restore_{i}"):
+                if restore_backup(i):
+                    st.success(f"Backup {i} restored!")
+                    st.rerun()
+                else:
+                    st.error(f"Failed to restore Backup {i}.")
+                    
+    st.divider()
+    st.caption("Share your Locker")
+    
+    # Download current locker state
+    if st.session_state.get('locker'):
+        locker_json = json.dumps(st.session_state.locker, indent=2)
+        st.download_button(
+            label="⬇️ Export Locker",
+            data=locker_json,
+            file_name="gamma_locker_export.json",
+            mime="application/json"
+        )
+        
+    uploaded_file = st.file_uploader("⬆️ Import Locker", type=["json"])
+    if uploaded_file is not None:
+        try:
+            imported_data = json.load(uploaded_file)
+            if isinstance(imported_data, list):
+                backup_locker()
+                st.session_state.locker = imported_data
+                save_l()
+                st.success("Locker imported successfully!")
+                st.rerun()
+            else:
+                st.error("Invalid format: expected a list of IDs.")
+        except Exception as e:
+            st.error(f"Failed to parse JSON: {e}")
 
 if st.sidebar.button("🎲 Load 50 random weapons"):
     st.session_state.locker = df['id'].sample(50).tolist()
