@@ -250,3 +250,8 @@ def test_sidearm_prefixes_are_sidearms():
             # Even if it fires powerful ammo or has weird stats, these specific IDs must remain Sidearm.
             assert app.get_role(w) == "Sidearm", f"Weapon {w['id']} with prefix {prefix} is not a Sidearm"
 
+
+# Ensure test harness never writes to local user disk.
+app.save_l = lambda: None
+app.backup_locker = lambda: None
+app.save_ui_prefs = lambda: None
