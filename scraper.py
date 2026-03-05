@@ -361,8 +361,19 @@ for _, r in tqdm.tqdm(df_final.iterrows(), total=len(df_final)):
         y = int(r['gy'] * cell_size)
         
         # FIX: Some mods override the atlas texture with a small standalone sprite but forget to zero the original grid coords
-        if x >= img.width or y >= img.height:
-            x, y = 0, 0
+if x >= img.width or y >= img.height:
+            # Standalone texture fallback - Mod changed texture to a dedicated file but left old grid coords.
+            # Crop it perfectly to its valid alpha bounding box.
+            bbox = img.getbbox()
+            if bbox:
+                icon = img.crop(bbox)
+            else:
+                icon = img.crop((0, 0, w, h))
+            
+            # optionally verify/resize? Streamlit will scale it, so just saving raw bbox is fine.
+            icon.save(target_icon)
+            continue
+
             
         w = int(r['gw'] * cell_size)
         h = int(r['gh'] * cell_size)
