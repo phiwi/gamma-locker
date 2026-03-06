@@ -3,10 +3,12 @@ import pandas as pd
 import os, json
 import re
 import random
+import base64
+from functools import lru_cache
 from itertools import product
 from PIL import Image
 import altair as alt
-from save_reader import get_savegames, extract_weapons_from_scop
+from save_reader import get_savegames, extract_weapons_from_scop, extract_unknown_weapon_tokens
 from paths_config import get_path
 
 # --- CONFIG & PATHS ---
@@ -125,6 +127,7 @@ def save_ui_prefs():
         "set_search_query": st.session_state.get("set_search_query", ""),
         "search_result_limit": st.session_state.get("search_result_limit", 30),
         "show_raw_stats_cards": st.session_state.get("show_raw_stats_cards", False),
+        "show_locker_icons": st.session_state.get("show_locker_icons", False),
     }
     with open(UI_PREFS_FILE, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
@@ -137,6 +140,7 @@ def init_ui_prefs():
         "set_search_query": "",
         "search_result_limit": 30,
         "show_raw_stats_cards": False,
+        "show_locker_icons": False,
     }
     for key, default_value in defaults.items():
         if key not in st.session_state:
@@ -331,6 +335,27 @@ def load_icon_image(path):
 
     return swap_rgb if use_swapped else orig_rgb
 
+ICON_OVERRIDES = {
+    "wpn_scar": "wpn_scar_siber",
+}
+
+def icon_path_for_id(w_id):
+    if not w_id:
+        return None
+    resolved = ICON_OVERRIDES.get(str(w_id), str(w_id))
+    return os.path.join(DATA_DIR, "icons", f"{resolved}.png")
+
+@lru_cache(maxsize=2048)
+def icon_data_url(path):
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        with open(path, "rb") as fh:
+            encoded = base64.b64encode(fh.read()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+    except Exception:
+        return None
+
 def get_role(r):
     cls_raw = str(r.get('class', '')).lower()
     slot = int(r.get('slot', 0))
@@ -359,6 +384,13 @@ def load_data():
     
     # Manual Data Overrides
     df.loc[df['id'] == 'wpn_fn2000_nimble', 'real_name'] = 'FN F2000 "Competitor"'
+    # Remington 700 chassis variants inherit the wrong ammo class in some configs.
+    remington_700_fix_ids = [
+        'wpn_remington700_archangel',
+        'wpn_remington700_mod_x_gen3',
+        'wpn_remington700_magpul_pro',
+    ]
+    df.loc[df['id'].isin(remington_700_fix_ids), 'ammo'] = '7.62x51_fmj'
     
     # Drop melee/knife rows entirely (by class or name/id hints)
     melee_mask = df['class'].fillna('').str.lower().str.contains('knife|melee|axe|tomahawk', na=False)
@@ -403,6 +435,10 @@ df = load_data()
 
 if 'locker' not in st.session_state:
     st.session_state.locker = load_locker()
+if 'last_unknown' not in st.session_state:
+    st.session_state.last_unknown = []
+if 'last_import_msg' not in st.session_state:
+    st.session_state.last_import_msg = ""
 
 init_ui_prefs()
 apply_unified_score_to_df()
@@ -691,17 +727,25 @@ role_filter = st.sidebar.multiselect(
     "Show roles", ["Sidearm","Power","Workhorse"],
     default=["Sidearm","Power","Workhorse"], help="Limit visible weapons to these roles."
 )
+st.sidebar.checkbox(
+    "Show icons in locker",
+    key="show_locker_icons",
+    help="Disabling icons makes the locker table much faster to render.",
+)
 col_b1, col_b2 = st.sidebar.columns(2)
 if col_b1.button("💾 Save"):
+    backup_locker()
     save_l()
-    st.sidebar.success("Saved")
+    st.sidebar.success("Saved (backup updated)")
 if col_b2.button("🗑️ Clear"):
     st.session_state.locker = []
     save_l()
     st.rerun()
+st.sidebar.caption("Save updates your locker file and rotates a backup. Restore from backups in Advanced.")
 
 # Hidden backup restore controls
 with st.sidebar.expander("🛠️ Advanced"):
+    st.caption("Backups: last 3 saves are stored as my_locker_backup_1..3.json.")
     for i in range(1, 4):
         # Support fallback logic display
         b_path = BACKUP_FILE.replace('.json', f'_{i}.json')
@@ -777,7 +821,12 @@ if saves:
                 already_count = len(unique_found) - new_count
                 st.session_state.locker = list(before.union(unique_found))
                 save_l()
-                st.sidebar.success(f"Import summary: {new_count} new, {already_count} already present (found: {len(unique_found)}).")
+                st.session_state.last_import_msg = (
+                    f"Import summary: {new_count} new, {already_count} already present (found: {len(unique_found)})."
+                )
+                st.session_state.last_unknown = extract_unknown_weapon_tokens(
+                    os.path.join(SAVE_DIR, selected_save), all_ids
+                )
                 st.rerun()
             else:
                 st.sidebar.warning("No known weapons found in this savegame.")
@@ -791,7 +840,12 @@ if saves:
                 unique_found = list(dict.fromkeys(found))
                 st.session_state.locker = unique_found
                 save_l()
-                st.sidebar.success(f"Replace summary: now {len(unique_found)} weapons (previously {previous_count}).")
+                st.session_state.last_import_msg = (
+                    f"Replace summary: now {len(unique_found)} weapons (previously {previous_count})."
+                )
+                st.session_state.last_unknown = extract_unknown_weapon_tokens(
+                    os.path.join(SAVE_DIR, selected_save), all_ids
+                )
                 st.rerun()
             else:
                 st.sidebar.warning("No known weapons found in this savegame.")
@@ -845,6 +899,17 @@ if saves:
                         st.info("No weapons selected.")
             else:
                 st.write("All weapons from this save are already in your locker.")
+        if st.button("🧪 Scan unknown IDs", key=f"scan_unknown_{selected_save}"):
+            with st.spinner("Scanning unknown weapon IDs..."):
+                st.session_state.last_unknown = extract_unknown_weapon_tokens(
+                    os.path.join(SAVE_DIR, selected_save), all_ids
+                )
+
+    if st.session_state.last_import_msg:
+        st.sidebar.success(st.session_state.last_import_msg)
+    if st.session_state.last_unknown:
+        with st.sidebar.expander("Unknown weapon IDs from save", expanded=False):
+            st.write(", ".join(st.session_state.last_unknown))
 else:
     st.sidebar.error("No savegames found.")
 
@@ -892,42 +957,51 @@ with t0:
         
         if not locker_df.empty:
             locker_df.insert(0, 'Remove', False)
-            
-            # Icons for ImageColumn
-            def get_icon_path(w_id):
-                # Absolute path is often needed for ImageColumn
-                p = os.path.abspath(f"loadout_lab_data/icons/{w_id}.png")
-                return p if os.path.exists(p) else None
 
-            locker_df['Icon'] = locker_df['id'].apply(get_icon_path)
+            show_locker_icons = st.session_state.get("show_locker_icons", False)
             
-            display_df = locker_df[['Remove', 'Icon', 'id', 'pretty_name', 'class', 'hit', 'rpm', 'rec', 'mag', 'score']].copy()
+            if show_locker_icons:
+                # Icons for ImageColumn
+                def get_icon_path(w_id):
+                    p = icon_path_for_id(w_id)
+                    return p if p and os.path.exists(p) else None
+
+                locker_df['Icon'] = locker_df['id'].apply(lambda w_id: icon_data_url(get_icon_path(w_id)))
+                display_df = locker_df[['Remove', 'Icon', 'id', 'pretty_name', 'class', 'hit', 'rpm', 'rec', 'mag', 'score']].copy()
+            else:
+                display_df = locker_df[['Remove', 'id', 'pretty_name', 'class', 'hit', 'rpm', 'rec', 'mag', 'score']].copy()
             # show heatmap of scores for quick visual scan if matplotlib is available
             try:
                 import matplotlib  # noqa: F401
-                heat_df = display_df.drop(columns=['Remove','Icon']).copy()
+                heat_df = display_df.drop(columns=['Remove'] + (["Icon"] if show_locker_icons else [])).copy()
                 heat_df.columns = ['id','pretty_name','class','hit','rpm','rec','mag','score']
                 st.dataframe(heat_df.style.background_gradient(subset=['score'], cmap='viridis'), width='stretch', hide_index=True)
             except ImportError:
                 pass
 
-            display_df.columns = ['Remove', 'Icon', 'ID', 'Name', 'Class', 'Damage', 'RPM', 'Recoil', 'Mag Size', 'Score']
+            if show_locker_icons:
+                display_df.columns = ['Remove', 'Icon', 'ID', 'Name', 'Class', 'Damage', 'RPM', 'Recoil', 'Mag Size', 'Score']
+            else:
+                display_df.columns = ['Remove', 'ID', 'Name', 'Class', 'Damage', 'RPM', 'Recoil', 'Mag Size', 'Score']
             display_df['Score'] = display_df['Score'].round(3)
             display_df['Damage'] = (display_df['Damage'] * 100).astype(int)
             display_df['Recoil'] = display_df['Recoil'].round(3)
             display_df['Mag Size'] = display_df['Mag Size'].astype(int)
             display_df['RPM'] = display_df['RPM'].astype(int)
             
+            column_config = {
+                "ID": None,
+                "Remove": st.column_config.CheckboxColumn("❌", help="Mark to remove", default=False),
+            }
+            if show_locker_icons:
+                column_config["Icon"] = st.column_config.ImageColumn("Icon", help="Weapon preview", width="small")
+
             edited_df = st.data_editor(
                 display_df,
                 hide_index=True,
                 width='stretch',
-                disabled=['Icon', 'Name', 'Class', 'Damage', 'RPM', 'Recoil', 'Mag Size', 'Score'],
-                column_config={
-                    "ID": None,
-                    "Icon": st.column_config.ImageColumn("Icon", help="Weapon preview", width="small"),
-                    "Remove": st.column_config.CheckboxColumn("❌", help="Mark to remove", default=False),
-                },
+                disabled=[c for c in ['Icon', 'Name', 'Class', 'Damage', 'RPM', 'Recoil', 'Mag Size', 'Score'] if c in display_df.columns],
+                column_config=column_config,
                 key="locker_bulk_editor"
             )
             
@@ -1001,7 +1075,7 @@ with t1:
             for _, r in render_hits.iterrows():
                 c_img, c_txt, c_btn = st.columns([1, 4, 1])
                 img_path = f"loadout_lab_data/icons/{r['id']}.png"
-                img = load_icon_image(img_path)
+                img = load_icon_image(icon_path_for_id(r['id']))
                 if img is not None:
                     c_img.image(img, width=80)
                 m = "🐗 " if r['mutant_killer'] else ""
@@ -1043,6 +1117,25 @@ with t2:
         st.warning("Add at least 3 weapons to generate sets.")
     else:
         st.caption("Scoring: normalized display score (0-100) + raw draft fitness in background")
+        auto_generate = st.checkbox(
+            "Auto-generate sets",
+            key="auto_generate_sets",
+            value=st.session_state.get("auto_generate_sets", False),
+            help="Disable to avoid heavy recompute on every rerun.",
+        )
+        locker_hash = hash(tuple(sorted(st.session_state.locker)))
+        if auto_generate:
+            st.session_state.sets_ready = True
+            st.session_state.sets_locker_hash = locker_hash
+        else:
+            if st.button("Generate sets"):
+                st.session_state.sets_ready = True
+                st.session_state.sets_locker_hash = locker_hash
+                st.rerun()
+            if not st.session_state.get("sets_ready") or st.session_state.get("sets_locker_hash") != locker_hash:
+                st.info("Click 'Generate sets' to compute loadouts.")
+                save_ui_prefs()
+                st.stop()
         # Diagnostics: role distribution in current locker
         locker_role_df = df[df['id'].isin(st.session_state.locker)].copy()
         role_counts_diag = locker_role_df['role_label'].value_counts()
@@ -1272,7 +1365,7 @@ with t2:
                         continue
                     with cols[i]:
                         img_path = f"loadout_lab_data/icons/{w['id']}.png"
-                        img = load_icon_image(img_path)
+                        img = load_icon_image(icon_path_for_id(w['id']))
                         if img is not None:
                             st.image(img, width='content')
                         st.write(f"*{labels[i]}*")
