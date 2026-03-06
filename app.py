@@ -646,15 +646,17 @@ def _raw_calculate_all_sets(inventory_ids, strategy):
                 return random.choice(top)
             
             # Redundant tiers (Blue: 20+, Orange: 30+)
-            if strategy == "Balanced":
-                f_scores = [triple_fitness(t) for t in group]
-                max_f = max(f_scores)
-                min_f = min(f_scores)
-                threshold = max_f - (max_f - min_f) * 0.4
-                balanced_group = [t for t in group if triple_fitness(t) >= threshold]
-                return random.choice(balanced_group)
+            if strategy == "Maxxed":
+                best_f = max(triple_fitness(t) for t in group)
+                top = [t for t in group if triple_fitness(t) == best_f]
+                return random.choice(top)
             
-            return random.choice(group)
+            f_scores = [triple_fitness(t) for t in group]
+            max_f = max(f_scores)
+            min_f = min(f_scores)
+            threshold = max_f - (max_f - min_f) * 0.4
+            balanced_group = [t for t in group if triple_fitness(t) >= threshold]
+            return random.choice(balanced_group)
         return None
 
     # Draft loop: Continue as long as we can find ANY valid set 
