@@ -128,6 +128,7 @@ def save_ui_prefs():
         "search_result_limit": st.session_state.get("search_result_limit", 30),
         "show_raw_stats_cards": st.session_state.get("show_raw_stats_cards", False),
         "show_locker_icons": st.session_state.get("show_locker_icons", False),
+        "diversity_draft_mode": st.session_state.get("diversity_draft_mode", False),
     }
     with open(UI_PREFS_FILE, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
@@ -141,6 +142,7 @@ def init_ui_prefs():
         "search_result_limit": 30,
         "show_raw_stats_cards": False,
         "show_locker_icons": False,
+        "diversity_draft_mode": False,
     }
     for key, default_value in defaults.items():
         if key not in st.session_state:
@@ -490,16 +492,21 @@ if os.path.exists(BALANCE_CFG_PATH):
 from functools import lru_cache
 
 @lru_cache(maxsize=128)
-def _cached_sets(inventory_tuple, strategy):
+def _cached_sets(inventory_tuple, strategy, draft_mode):
     # convert back to list; perform full calculation here
-    return _raw_calculate_all_sets(list(inventory_tuple), strategy)
+    return _raw_calculate_all_sets(list(inventory_tuple), strategy, draft_mode)
 
-def calculate_all_sets(inventory_ids, strategy):
-    return _cached_sets(tuple(inventory_ids), strategy)
+def calculate_all_sets(inventory_ids, strategy, draft_mode="classic"):
+    return _cached_sets(tuple(inventory_ids), strategy, draft_mode)
 
-# move the previous body into _raw_calculate_all_sets
+def _raw_calculate_all_sets(inventory_ids, strategy, draft_mode):
+    if draft_mode == "diversity":
+        return _raw_calculate_all_sets_diversity(inventory_ids, strategy)
+    return _raw_calculate_all_sets_classic(inventory_ids, strategy)
 
-def _raw_calculate_all_sets(inventory_ids, strategy):
+# move the previous body into _raw_calculate_all_sets_classic
+
+def _raw_calculate_all_sets_classic(inventory_ids, strategy):
     all_w_df = df[df['id'].isin(inventory_ids)].copy()
     all_w_df['role_label'] = all_w_df.apply(get_role, axis=1)
 
@@ -715,6 +722,145 @@ def _raw_calculate_all_sets(inventory_ids, strategy):
 
     # Final sorting by tier, then fitness
     final_sets.sort(key=lambda x: (x.get('tier_val', 5), -x['fitness']))
+
+    return final_sets
+
+def _raw_calculate_all_sets_diversity(inventory_ids, strategy):
+    all_w_df = df[df['id'].isin(inventory_ids)].copy()
+    all_w_df['role_label'] = all_w_df.apply(get_role, axis=1)
+
+    score_field = 'final_score'
+
+    def score_of(w):
+        return float(w.get(score_field, w.get('score', 0)))
+
+    all_sidearms_df = all_w_df[all_w_df['role_label'] == 'Sidearm']
+    all_w = all_w_df.to_dict('records')
+    sidearms = all_sidearms_df.to_dict('records')
+    powers = [w for w in all_w if w['role_label'] == 'Power']
+    workhorses = [w for w in all_w if w['role_label'] == 'Workhorse']
+
+    if not all_w or not sidearms or not powers or not workhorses:
+        return []
+
+    usage = {w_id: 0 for w_id in inventory_ids}
+    final_sets = []
+
+    def effective_score(w):
+        return score_of(w) if usage.get(w.get('id'), 0) == 0 else 0.0
+
+    def redundancy_count(triple):
+        return sum(1 for w in triple if usage.get(w.get('id'), 0) > 0)
+
+    def target_average_score():
+        def avg_unused(rows):
+            unused = [score_of(w) for w in rows if usage.get(w.get('id'), 0) == 0]
+            if unused:
+                return sum(unused) / len(unused)
+            if rows:
+                return sum(score_of(w) for w in rows) / len(rows)
+            return 0.0
+
+        return avg_unused(sidearms) + avg_unused(powers) + avg_unused(workhorses)
+
+    def triple_total(triple):
+        return sum(effective_score(w) for w in triple)
+
+    def triple_fitness(triple):
+        total = triple_total(triple)
+        if strategy == "Maxxed":
+            return total
+        return -abs(target_average_score() - total)
+
+    def pick_candidate(candidates):
+        if not candidates:
+            return None
+        best_f = max(triple_fitness(t) for t in candidates)
+        top = [t for t in candidates if triple_fitness(t) == best_f]
+        min_red = min(redundancy_count(t) for t in top)
+        top = [t for t in top if redundancy_count(t) == min_red]
+        return random.choice(top)
+
+    def build_candidates(allow_reuse_sidearm, allow_reuse_power, allow_reuse_workhorse, require_unused=True):
+        candidates = []
+        for p in powers:
+            if not allow_reuse_power and usage.get(p.get('id'), 0) > 0:
+                continue
+            for wh in workhorses:
+                if not allow_reuse_workhorse and usage.get(wh.get('id'), 0) > 0:
+                    continue
+                for s in sidearms:
+                    if not allow_reuse_sidearm and usage.get(s.get('id'), 0) > 0:
+                        continue
+                    if not is_valid_set(s, p, wh):
+                        continue
+                    if require_unused and all(usage.get(w.get('id'), 0) > 0 for w in (p, wh, s)):
+                        continue
+                    candidates.append((p, wh, s))
+        return candidates
+
+    def add_set(triple, phase):
+        order_idx = len(final_sets)
+        active_triple = [w for w in triple if w]
+        raw_scores = [score_of(w) for w in active_triple]
+        display_scores = [float(w.get('score', score_of(w))) for w in active_triple]
+
+        tier_val, badge, tier_name = 10, "🟩", "Green: Flawless (Standard)"
+        red_count = redundancy_count(triple)
+        if red_count == 1:
+            tier_val, badge, tier_name = 20, "🟦", "Blue: Single Deficit"
+        elif red_count > 1:
+            tier_val, badge, tier_name = 30, "🟧", "Orange: Double Deficit"
+
+        weapon_payload = []
+        for w in triple:
+            w_copy = dict(w)
+            w_copy['draft_score_raw'] = score_of(w)
+            weapon_payload.append(w_copy)
+
+        for w in triple:
+            if w:
+                usage[w['id']] += 1
+
+        final_sets.append({
+            "weapons": weapon_payload,
+            "phase": phase,
+            "order": order_idx,
+            "badge": badge,
+            "tier_val": tier_val,
+            "tier_name": tier_name,
+            "fitness": triple_fitness(triple),
+            "avg_score": (sum(display_scores) / len(display_scores)) if display_scores else 0.0,
+            "avg_score_raw": (sum(raw_scores) / len(raw_scores)) if raw_scores else 0.0,
+        })
+
+    phases = [
+        (False, False, False, "P1"),
+        (True, False, False, "P2"),
+        (True, True, False, "P3"),
+        (True, True, True, "P4"),
+    ]
+
+    while True:
+        unused_ids = [w_id for w_id, count in usage.items() if count == 0]
+        if not unused_ids:
+            break
+
+        picked = None
+        for allow_s, allow_p, allow_wh, phase in phases:
+            candidates = build_candidates(allow_s, allow_p, allow_wh, require_unused=True)
+            if candidates:
+                picked = (pick_candidate(candidates), phase)
+                break
+
+        if not picked:
+            # No valid triple can advance unused weapons; exit to avoid infinite loop.
+            break
+
+        best, phase = picked
+        if not best:
+            break
+        add_set(best, phase)
 
     return final_sets
 
@@ -1126,18 +1272,6 @@ with t2:
             help="Disable to avoid heavy recompute on every rerun.",
         )
         locker_hash = hash(tuple(sorted(st.session_state.locker)))
-        if auto_generate:
-            st.session_state.sets_ready = True
-            st.session_state.sets_locker_hash = locker_hash
-        else:
-            if st.button("Generate sets"):
-                st.session_state.sets_ready = True
-                st.session_state.sets_locker_hash = locker_hash
-                st.rerun()
-            if not st.session_state.get("sets_ready") or st.session_state.get("sets_locker_hash") != locker_hash:
-                st.info("Click 'Generate sets' to compute loadouts.")
-                save_ui_prefs()
-                st.stop()
         # Diagnostics: role distribution in current locker
         locker_role_df = df[df['id'].isin(st.session_state.locker)].copy()
         role_counts_diag = locker_role_df['role_label'].value_counts()
@@ -1151,6 +1285,25 @@ with t2:
         )
 
         strat = st.radio("Assignment mode:", ["Balanced", "Maxxed"], horizontal=True, key="strategy_mode")
+        diversity_mode = st.checkbox(
+            "Use diversity draft (experimental)",
+            key="diversity_draft_mode",
+            value=st.session_state.get("diversity_draft_mode", False),
+            help="Prioritizes unused weapons and minimizes redundancies before reusing items.",
+        )
+        draft_key = (locker_hash, strat, diversity_mode)
+        if auto_generate:
+            st.session_state.sets_ready = True
+            st.session_state.sets_locker_hash = draft_key
+        else:
+            if st.button("Generate sets"):
+                st.session_state.sets_ready = True
+                st.session_state.sets_locker_hash = draft_key
+                st.rerun()
+            if not st.session_state.get("sets_ready") or st.session_state.get("sets_locker_hash") != draft_key:
+                st.info("Click 'Generate sets' to compute loadouts.")
+                save_ui_prefs()
+                st.stop()
         show_raw_stats_cards = st.checkbox(
             "Show raw stats inspector",
             key="show_raw_stats_cards",
@@ -1160,7 +1313,10 @@ with t2:
             st.caption("Maxxed label: P1 strict unique draft, then P2 (Light→Power only with MP/Shotgun Workhorse), then redundant phase R with uniform sampling.")
         else:
             st.caption("Balanced label: same P1/P2/R draft model, but set fitness targets balanced totals.")
-        res_sets = calculate_all_sets(st.session_state.locker, strat)
+        draft_mode = "diversity" if diversity_mode else "classic"
+        res_sets = calculate_all_sets(st.session_state.locker, strat, draft_mode)
+        if diversity_mode and not res_sets:
+            st.warning("No valid sets found in diversity mode. Try disabling it or ensure you have a mutant-killer and mixed ammo groups.")
         # cache usage counts for filter and scoring purposes
         usage = {}
         for s_entry in res_sets:

@@ -321,6 +321,12 @@ def texture_priority(path_str):
 
     return (source_rank, mod_rank, len(path_str))
 
+def apply_icon_fixes(icon_img, weapon_id, cell_size):
+    w_id = str(weapon_id).lower()
+    if 'ump45' in w_id and icon_img.width >= cell_size * 4 and icon_img.height >= cell_size * 4:
+        return icon_img.crop((0, 0, cell_size, cell_size))
+    return icon_img
+
 tex_candidates = {}
 for start_p in TEXTURE_PATHS:
     if not start_p.exists():
@@ -410,6 +416,7 @@ for _, r in tqdm.tqdm(df_final.iterrows(), total=len(df_final)):
             else:
                 icon = img.crop((0, 0, w, h))
             
+            icon = apply_icon_fixes(icon, r['id'], cell_size)
             icon.save(target_icon)
             continue
 
@@ -419,6 +426,7 @@ for _, r in tqdm.tqdm(df_final.iterrows(), total=len(df_final)):
 
         try:
             icon = img.crop((x, y, x + w, y + h))
+            icon = apply_icon_fixes(icon, r['id'], cell_size)
             icon.save(target_icon)
         except: pass
 
