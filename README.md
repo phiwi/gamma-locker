@@ -37,7 +37,8 @@ This project is distributed as **code only**.
 - Add/remove weapons
 - Bulk removal via checkboxes
 - Save/load local locker state
-- Backup restore
+- Rolling 3-layer backups + restore
+- Import/export locker JSON
 - Empty-state quick actions (save import + starter random set)
 
 ### Savegame Import
@@ -45,6 +46,7 @@ This project is distributed as **code only**.
 - Add-all or replace-all from save
 - Selective import
 - Can reveal weapon IDs present in save data, including stash-related entries (when present)
+- Variant-aware matching for save tokens (suffix/prefix fallback)
 - Import summary feedback (`new`, `already present`, `found`)
 
 ### Weapon Search
@@ -60,13 +62,13 @@ This project is distributed as **code only**.
   - **1 Primary (Power)**: Sniper, LMG, or heavy calibers.
   - **1 Secondary (Workhorse)**: Assault Rifles, SMGs, or Shotguns.
 - **Drafting Scheme & Priority (Tiers):**
-  - 🟩 **GREEN (Tier 1): Pure Maxxing** — Unique Heavy + Unique Light (Workhorse) + Unique Sidearm.
-  - 🟦 **BLUE (Tier 2): Redundant Sidearm + Pure Maxxing** — Unique Heavy + Unique Light (Workhorse) + reused Sidearm.
-  - 🔲 **LIGHT BLUE (Tier 3): Redundant Sidearm + Hybrid (Heavy)** — Unique Heavy + Unique MP/Shotgun (Workhorse) + reused Sidearm.
-  - 🟧 **ORANGE (Tier 4): Redundant Sidearm + Hybrid (Light)** — Unique Light + Unique MP/Shotgun (Workhorse) + reused Sidearm.
-  - 🟥 **RED (Tier 5): Multiple Redundancy** — One or more Primary/Workhorse weapons are reused to fill the set until all weapons are drafted.
+  - 🟩 **GREEN: Flawless** — No role deficits; unique Sidearm/Power/Workhorse.
+  - 🟦 **BLUE: Single Deficit** — One role reused (may include hybrid workhorse variants).
+  - 🟧 **ORANGE: Double Deficit** — Two roles reused (may include hybrid workhorse variants).
+  - 🟥 **RED: Multiple Redundancies** — Heavy reuse until all weapons are drafted.
 - **Modes:** `Balanced` (targets role-average total) and `Maxxed` (aims for highest total score).
 - **Sampling:** For redundant sets (Tiers 2-5), the system samples uniformly from available weapon combinations within the same tier to ensure variety.
+- **Coverage:** Drafting guarantees full locker utilization.
 - **Badge-based classification:** Sets are tagged with their tier badge and descriptive label.
 - Sorting, set search, and random roll available.
 
@@ -74,6 +76,7 @@ This project is distributed as **code only**.
 - `Raw`: base formula from scraper/LTX values (`hit * rpm / rec + mag * 0.5`).
 - `Cal-Adjusted`: same base formula with caliber weighting on damage.
 - `Unified score`: equals `Cal-Adjusted` and is the single weapon score used in both `Balanced` and `Maxxed`.
+- UI displays a normalized 0-100 score for readability; draft logic uses the unified score internally.
 - `Maxxed` strategy picks highest total set score for unique sets; redundant sets are sampled uniformly.
 - `Balanced` strategy picks sets closest to the role-average target total (same two-phase flow).
 - Planner labels explicitly show the active ranking basis (Balanced vs Maxxed).
@@ -82,10 +85,12 @@ This project is distributed as **code only**.
 - RGBA compositing on black background
 - Per-icon R/B swap detection for mixed DDS exports
 - Fallback handling for invalid/transparent icons
+- Automatic crop/pad fixes for oversized or double-width icon exports
 
 ### Lean UX Helpers
 - Startup health check in sidebar (`paths_config.json`, `weapons_stats.csv`, `icons/*.png`)
 - Remembered UI defaults (assignment mode, set sorting, set search, search render limit)
+- Locker filters (role-based + hide redundant) and optional score heatmap
 
 ---
 
@@ -275,19 +280,19 @@ Latest release page:
 Example (Linux/macOS):
 
 ```bash
-curl -L -o gamma-locker.zip https://github.com/phiwi/gamma-locker/releases/download/v0.1.5/gamma-locker-0.1.5-code-only.zip
+curl -L -o gamma-locker.zip https://github.com/phiwi/gamma-locker/releases/download/v1.3.9/gamma-locker-1.3.9-code-only.zip
 sha256sum gamma-locker.zip
 ```
 
 Example (PowerShell):
 
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/phiwi/gamma-locker/releases/download/v0.1.5/gamma-locker-0.1.5-code-only.zip" -OutFile "gamma-locker.zip"
+Invoke-WebRequest -Uri "https://github.com/phiwi/gamma-locker/releases/download/v1.3.9/gamma-locker-1.3.9-code-only.zip" -OutFile "gamma-locker.zip"
 Get-FileHash .\gamma-locker.zip -Algorithm SHA256
 ```
 
-Expected SHA256 for `v0.1.5`:
-- `5f4b3228afa0779cf3c8eb46d4f322d40cebfb5b6b378cf454a248e8e189f89d`
+Expected SHA256 for `v1.3.9`:
+- `9046c355e5f7559b532b7dea2d06f8c469528fd9c6521ab5f3e92adba735234f`
 
 ---
 
